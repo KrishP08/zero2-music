@@ -12,8 +12,8 @@ IS_PI = os.path.exists("/proc/device-tree/model") and "raspberry" in open(
 ).read().lower()
 
 # ── Display Settings ────────────────────────────────────────────────
-SCREEN_WIDTH = 240
-SCREEN_HEIGHT = 320
+SCREEN_WIDTH = 320
+SCREEN_HEIGHT = 240
 FPS = 30
 
 # SPI display pins (for Pi with ST7789 / ILI9341)

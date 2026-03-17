@@ -10,6 +10,7 @@ import config
 from ui.theme import (
     Colors, Fonts, draw_rounded_rect, draw_glass_panel,
     draw_progress_bar, render_text, draw_gradient_bg_cached,
+    load_icon, tint_icon,
 )
 
 
@@ -17,6 +18,11 @@ class StatusBar:
     """Top status bar showing time and status icons."""
 
     HEIGHT = 28
+
+    def __init__(self):
+        self._bt_icon = load_icon("bluetooth", size=(14, 14))
+        self._wifi_icon = load_icon("wifi", size=(14, 14))
+        self._music_icon = load_icon("music", size=(14, 14))
 
     def render(self, surface, x_offset=0):
         # Semi-transparent bar
@@ -33,13 +39,33 @@ class StatusBar:
             center=True
         )
 
-        # "♪" indicator on left
-        render_text(
-            surface, "♪",
-            (x_offset + 10, 6),
-            font=Fonts.small(),
-            color=Colors.ACCENT
-        )
+        # Music note icon on left
+        if self._music_icon:
+            tinted = tint_icon(self._music_icon, Colors.ACCENT)
+            surface.blit(tinted, (x_offset + 8, 7))
+        else:
+            render_text(
+                surface, "♪",
+                (x_offset + 10, 6),
+                font=Fonts.small(),
+                color=Colors.ACCENT
+            )
+
+        # Right-side status icons
+        icon_x = x_offset + config.SCREEN_WIDTH - 12
+
+        # WiFi icon
+        if self._wifi_icon:
+            # Get live status from app (injected via global or just show icon)
+            tinted = tint_icon(self._wifi_icon, Colors.ACCENT)
+            icon_x -= 16
+            surface.blit(tinted, (icon_x, 7))
+
+        # Bluetooth icon
+        if self._bt_icon:
+            tinted = tint_icon(self._bt_icon, Colors.ACCENT)
+            icon_x -= 18
+            surface.blit(tinted, (icon_x, 7))
 
         # Subtle bottom divider
         pygame.draw.line(

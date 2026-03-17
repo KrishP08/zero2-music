@@ -212,10 +212,30 @@ def render_text(surface, text, pos, font=None, color=Colors.TEXT_PRIMARY,
     return rendered.get_size()
 
 
+_icon_cache = {}
+
+
 def load_icon(name, size=(24, 24)):
-    """Load and scale an icon from assets/icons/."""
+    """Load and scale an icon from assets/icons/ (cached)."""
+    key = (name, size)
+    if key in _icon_cache:
+        return _icon_cache[key]
     path = os.path.join(config.ICON_DIR, f"{name}.png")
     if os.path.exists(path):
         icon = pygame.image.load(path).convert_alpha()
-        return pygame.transform.smoothscale(icon, size)
+        icon = pygame.transform.smoothscale(icon, size)
+        _icon_cache[key] = icon
+        return icon
     return None
+
+
+def tint_icon(icon_surface, color):
+    """Return a copy of icon_surface tinted to the given color, preserving alpha."""
+    tinted = icon_surface.copy()
+    w, h = tinted.get_size()
+    for px in range(w):
+        for py in range(h):
+            r, g, b, a = tinted.get_at((px, py))
+            if a > 0:
+                tinted.set_at((px, py), (*color[:3], a))
+    return tinted
