@@ -310,41 +310,75 @@ class PlaybackControls:
     """Horizontal playback control row: shuffle, prev, play/pause, next, playlist."""
 
     def __init__(self):
-        self.selected = 1  # 0=prev, 1=play/pause, 2=next
+        self._icons = {
+            "play": load_icon("play", size=(16, 16)),
+            "pause": load_icon("pause", size=(16, 16)),
+            "prev": load_icon("prev", size=(16, 16)),
+            "next": load_icon("next", size=(16, 16)),
+            "shuffle": load_icon("shuffle", size=(14, 14)),
+            "repeat": load_icon("repeat", size=(14, 14)),
+        }
+        self.selected = 1  # Default focus on play/pause
 
-    def render(self, surface, rect, is_playing=False, x_offset=0):
+    def render(self, surface, rect, is_playing=False, shuffle_on=False, repeat_on=False, x_offset=0):
         """Render controls within a given rect area."""
         x, y, w, h = rect
         center_y = y + h // 2
         center_x = x + w // 2 + x_offset
 
-        spacing = 36
+        spacing = 38
+        outer_spacing = 76
         main_r = 18
-        side_r = 12
 
-        buttons = [
-            ("⏮", center_x - spacing, side_r),
-            ("⏸" if is_playing else "▶", center_x, main_r),
-            ("⏭", center_x + spacing, side_r),
-        ]
+        # Highlight selected
+        if 0 <= self.selected <= 4:
+            positions = [
+                center_x - outer_spacing,
+                center_x - spacing,
+                center_x,
+                center_x + spacing,
+                center_x + outer_spacing
+            ]
+            hx = positions[self.selected]
+            hr = main_r + 2 if self.selected == 2 else 14
+            pygame.draw.circle(surface, (255, 255, 255, 60), (hx, center_y), hr, width=2)
+            
+        # Main play button with accent fill
+        pygame.draw.circle(surface, Colors.ACCENT, (center_x, center_y), main_r)
+        glow_surf = pygame.Surface((main_r * 3, main_r * 3), pygame.SRCALPHA)
+        pygame.draw.circle(glow_surf, (*Colors.ACCENT[:3], 40),
+                           (main_r * 3 // 2, main_r * 3 // 2), main_r * 3 // 2)
+        surface.blit(glow_surf, (center_x - main_r * 3 // 2, center_y - main_r * 3 // 2))
 
-        for i, (icon, bx, br) in enumerate(buttons):
-            selected = (i == self.selected)
+        # Main Play/Pause
+        icon_name = "pause" if is_playing else "play"
+        if self._icons[icon_name]:
+            tinted = tint_icon(self._icons[icon_name], Colors.BG_DARK)
+            r = tinted.get_rect(center=(center_x + (2 if icon_name=="play" else 0), center_y))
+            surface.blit(tinted, r)
 
-            if selected and i == 1:
-                # Main play button with accent fill
-                pygame.draw.circle(surface, Colors.ACCENT, (bx, center_y), br)
-                glow_surf = pygame.Surface((br * 3, br * 3), pygame.SRCALPHA)
-                pygame.draw.circle(glow_surf, (*Colors.ACCENT[:3], 40),
-                                   (br * 3 // 2, br * 3 // 2), br * 3 // 2)
-                surface.blit(glow_surf, (bx - br * 3 // 2, center_y - br * 3 // 2))
-                pygame.draw.circle(surface, Colors.ACCENT, (bx, center_y), br)
-                icon_color = Colors.BG_DARK
-            else:
-                if i == 1:
-                    pygame.draw.circle(surface, Colors.BG_CARD_HIGHLIGHT, (bx, center_y), br)
-                icon_color = Colors.TEXT_PRIMARY if selected else Colors.TEXT_SECONDARY
+        # Prev
+        if self._icons["prev"]:
+            tinted = tint_icon(self._icons["prev"], Colors.TEXT_PRIMARY)
+            r = tinted.get_rect(center=(center_x - spacing, center_y))
+            surface.blit(tinted, r)
 
-            render_text(surface, icon, (bx, center_y),
-                        font=Fonts.body() if i != 1 else Fonts.title(),
-                        color=icon_color, center=True)
+        # Next
+        if self._icons["next"]:
+            tinted = tint_icon(self._icons["next"], Colors.TEXT_PRIMARY)
+            r = tinted.get_rect(center=(center_x + spacing, center_y))
+            surface.blit(tinted, r)
+
+        # Shuffle
+        if self._icons["shuffle"]:
+            color = Colors.ACCENT if shuffle_on else Colors.TEXT_MUTED
+            tinted = tint_icon(self._icons["shuffle"], color)
+            r = tinted.get_rect(center=(center_x - outer_spacing, center_y))
+            surface.blit(tinted, r)
+
+        # Repeat
+        if self._icons["repeat"]:
+            color = Colors.ACCENT if repeat_on else Colors.TEXT_MUTED
+            tinted = tint_icon(self._icons["repeat"], color)
+            r = tinted.get_rect(center=(center_x + outer_spacing, center_y))
+            surface.blit(tinted, r)

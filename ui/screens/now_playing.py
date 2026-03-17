@@ -27,7 +27,11 @@ class NowPlayingScreen(Screen):
         self._album_art_surface = None
         self._current_art_file = None
         self._art_size = 124
-
+        
+        # Focus mode for accessing Shuffle/Repeat with clickwheel
+        self.controls_focused = False
+        self.focus_timer = 0.0
+        
     def on_enter(self):
         self._load_album_art()
 
@@ -74,6 +78,10 @@ class NowPlayingScreen(Screen):
         return surf
 
     def handle_input(self, action):
+        # Reset focus timer on any input
+        if self.controls_focused:
+            self.focus_timer = 3.0
+            
         if action == InputAction.BACK:
             self.app.screen_manager.pop()
         elif action == InputAction.PLAY_PAUSE:
@@ -83,13 +91,42 @@ class NowPlayingScreen(Screen):
         elif action == InputAction.PREV_TRACK:
             self._prev_track()
         elif action == InputAction.SCROLL_UP:
-            self.app.audio.volume_up()
-            self.volume_overlay.show(self.app.audio.volume)
+            if self.controls_focused:
+                self.controls.selected = min(4, self.controls.selected + 1)
+            else:
+                self.app.audio.volume_up()
+                self.volume_overlay.show(self.app.audio.volume)
         elif action == InputAction.SCROLL_DOWN:
-            self.app.audio.volume_down()
-            self.volume_overlay.show(self.app.audio.volume)
+            if self.controls_focused:
+                self.controls.selected = max(0, self.controls.selected - 1)
+            else:
+                self.app.audio.volume_down()
+                self.volume_overlay.show(self.app.audio.volume)
         elif action == InputAction.SELECT:
-            self.app.audio.toggle_pause()
+            if not self.controls_focused:
+                # Enter focus mode
+                self.controls_focused = True
+                self.focus_timer = 3.0
+                self.controls.selected = 2 # Highlight Play/Pause by default
+            else:
+                # Actuate focused button
+                idx = self.controls.selected
+                if idx == 0:
+                    self.app.playlist.toggle_shuffle()
+                elif idx == 1:
+                    self._prev_track()
+                elif idx == 2:
+                    self.app.audio.toggle_pause()
+                elif idx == 3:
+                    self._next_track()
+                elif idx == 4:
+                    from core.playlist import RepeatMode
+                    if self.app.playlist.repeat == RepeatMode.OFF:
+                        self.app.playlist.repeat = RepeatMode.ALL
+                    elif self.app.playlist.repeat == RepeatMode.ALL:
+                        self.app.playlist.repeat = RepeatMode.ONE
+                    else:
+                        self.app.playlist.repeat = RepeatMode.OFF
 
     def _next_track(self):
         track = self.app.playlist.next_track()
@@ -108,6 +145,15 @@ class NowPlayingScreen(Screen):
 
     def update(self, dt):
         self.volume_overlay.update(dt)
+        if self.controls_focused:
+            self.focus_timer -= dt
+            if self.focus_timer <= 0:
+                self.controls_focused = False
+                
+        # Auto update cover when track changes
+        track = self.app.playlist.current_track
+        if track and track.filepath != self._current_art_file:
+            self._load_album_art()
 
     def render(self, surface, x_offset=0):
         draw_gradient_bg_cached(surface)
@@ -123,46 +169,73 @@ class NowPlayingScreen(Screen):
 
         self.status_bar.render(surface, x_offset, title=fmt_text)
 
+        # Cava visualizer data
+        levels = self.app.cava.get_levels()
+        bar_count = self.app.cava.bars
+        
         # ── Left Column: Album Art ──────────────────────────────
-        art_x = x_offset + 14
-        art_y = StatusBar.HEIGHT + 10
+        theme_round = getattr(config, "NOW_PLAYING_THEME", "square") == "round"
+        
+        if theme_round:
+            art_x = x_offset + 24
+            art_y = StatusBar.HEIGHT + 24
+            
+            # Circular Visualizer
+            center_x = art_x + self._art_size // 2
+            center_y = art_y + self._art_size // 2
+            base_radius = self._art_size // 2 + 6
+            
+            import math
+            for i in range(bar_count):
+                angle = i * (math.pi * 2 / bar_count) - math.pi / 2
+                val = levels[i] if i < len(levels) else 0.0
+                mag = int(val * 24)  # amplify for circle
+                
+                x1 = center_x + math.cos(angle) * base_radius
+                y1 = center_y + math.sin(angle) * base_radius
+                x2 = center_x + math.cos(angle) * (base_radius + 4 + mag)
+                y2 = center_y + math.sin(angle) * (base_radius + 4 + mag)
+                pygame.draw.line(surface, Colors.ACCENT, (x1, y1), (x2, y2), 3)
 
-        # Glow behind art
-        glow_surf = pygame.Surface(
-            (self._art_size + 20, self._art_size + 20), pygame.SRCALPHA
-        )
-        pygame.draw.rect(
-            glow_surf, (*Colors.ACCENT[:3], 12),
-            (0, 0, self._art_size + 20, self._art_size + 20),
-            border_radius=16
-        )
-        surface.blit(glow_surf, (art_x - 10, art_y - 10))
-
-        if self._album_art_surface:
-            art_mask = pygame.Surface(
-                (self._art_size, self._art_size), pygame.SRCALPHA
-            )
-            pygame.draw.rect(
-                art_mask, (255, 255, 255, 255),
-                (0, 0, self._art_size, self._art_size),
-                border_radius=10
-            )
-            masked_art = self._album_art_surface.copy()
-            masked_art.blit(art_mask, (0, 0), special_flags=pygame.BLEND_RGBA_MIN)
-            surface.blit(masked_art, (art_x, art_y))
+            # Draw album art masked as a circle
+            if self._album_art_surface:
+                art_mask = pygame.Surface((self._art_size, self._art_size), pygame.SRCALPHA)
+                pygame.draw.circle(art_mask, (255, 255, 255, 255), (self._art_size // 2, self._art_size // 2), self._art_size // 2)
+                masked_art = self._album_art_surface.copy().convert_alpha()
+                masked_art.blit(art_mask, (0, 0), special_flags=pygame.BLEND_RGBA_MIN)
+                surface.blit(masked_art, (art_x, art_y))
+            else:
+                pygame.draw.circle(surface, Colors.BG_CARD, (center_x, center_y), self._art_size // 2)
+                
+            pygame.draw.circle(surface, (255, 255, 255, 20), (center_x, center_y), self._art_size // 2, width=1)
+            right_x = art_x + self._art_size + 24
+            
         else:
-            draw_rounded_rect(surface, Colors.BG_CARD,
-                              (art_x, art_y, self._art_size, self._art_size), radius=10)
+            # Classic Square Layout
+            art_x = x_offset + 14
+            art_y = StatusBar.HEIGHT + 10
 
-        # Border around art
-        border_surf = pygame.Surface((self._art_size, self._art_size), pygame.SRCALPHA)
-        pygame.draw.rect(border_surf, (255, 255, 255, 15),
-                         (0, 0, self._art_size, self._art_size),
-                         width=1, border_radius=10)
-        surface.blit(border_surf, (art_x, art_y))
+            # Glow behind art
+            glow_surf = pygame.Surface((self._art_size + 20, self._art_size + 20), pygame.SRCALPHA)
+            pygame.draw.rect(glow_surf, (*Colors.ACCENT[:3], 12), (0, 0, self._art_size + 20, self._art_size + 20), border_radius=16)
+            surface.blit(glow_surf, (art_x - 10, art_y - 10))
 
+            if self._album_art_surface:
+                art_mask = pygame.Surface((self._art_size, self._art_size), pygame.SRCALPHA)
+                pygame.draw.rect(art_mask, (255, 255, 255, 255), (0, 0, self._art_size, self._art_size), border_radius=10)
+                masked_art = self._album_art_surface.copy().convert_alpha()
+                masked_art.blit(art_mask, (0, 0), special_flags=pygame.BLEND_RGBA_MIN)
+                surface.blit(masked_art, (art_x, art_y))
+            else:
+                draw_rounded_rect(surface, Colors.BG_CARD, (art_x, art_y, self._art_size, self._art_size), radius=10)
+
+            # Border around art
+            border_surf = pygame.Surface((self._art_size, self._art_size), pygame.SRCALPHA)
+            pygame.draw.rect(border_surf, (255, 255, 255, 15), (0, 0, self._art_size, self._art_size), width=1, border_radius=10)
+            surface.blit(border_surf, (art_x, art_y))
+            
+            right_x = art_x + self._art_size + 24
         # ── Right Column: Info + Controls ───────────────────────
-        right_x = art_x + self._art_size + 16
         right_w = config.SCREEN_WIDTH - right_x - 10 + x_offset
         info_y = art_y + 4
 
@@ -206,26 +279,48 @@ class NowPlayingScreen(Screen):
                     font=Fonts.tiny(), color=Colors.TEXT_MUTED)
 
         # ── Playback Controls ───────────────────────────────────
+        from core.playlist import RepeatMode
         controls_y = prog_y + 24
+        
+        # Override PlaybackControls rendering if not focused
+        orig_selected = self.controls.selected
+        if not self.controls_focused:
+            self.controls.selected = -1 # Draw without active highlight circle
+            
         self.controls.render(surface,
-                             (right_x, controls_y, right_w, 36),
+                             (right_x - 20, controls_y, right_w + 10, 36),
                              is_playing=self.app.audio.is_playing,
+                             shuffle_on=self.app.playlist.shuffle,
+                             repeat_on=(self.app.playlist.repeat != RepeatMode.OFF),
                              x_offset=0)
+                             
+        self.controls.selected = orig_selected
 
-        # ── Bottom Visualizer ───────────────────────────────────
-        viz_y = config.SCREEN_HEIGHT - 4
-        viz_w = config.SCREEN_WIDTH
-        bar_count = 24
-        bar_spacing = viz_w // bar_count
-        import math, time as _time
-        t = _time.time()
-        for i in range(bar_count):
-            bh = int(3 * (0.5 + 0.5 * math.sin(t * 2 + i * 0.5)))
-            if bh < 1:
-                bh = 1
-            bx = x_offset + i * bar_spacing + 2
-            pygame.draw.rect(surface, (*Colors.ACCENT[:3], 40),
-                             (bx, viz_y - bh, bar_spacing - 2, bh))
+        if not theme_round:
+            # ── Bottom Linear Visualizer with Gradient ────────────────────────────
+            viz_y = config.SCREEN_HEIGHT - 6
+            viz_w = config.SCREEN_WIDTH
+            bar_w = viz_w // bar_count
+            
+            BAR_COLOR_TOP = (130, 100, 220)
+            BAR_COLOR_BOT = (200, 160, 255)
+            
+            for i in range(bar_count):
+                val = levels[i] if i < len(levels) else 0.0
+                bar_h = int(val * 40) # max height 40px at bottom
+                if bar_h <= 0:
+                    continue
+                    
+                bx = x_offset + i * bar_w
+                
+                # Draw vertical gradient
+                for j in range(bar_h):
+                    t = j / max(bar_h, 1)
+                    r = int(BAR_COLOR_TOP[0] * (1 - t) + BAR_COLOR_BOT[0] * t)
+                    g = int(BAR_COLOR_TOP[1] * (1 - t) + BAR_COLOR_BOT[1] * t)
+                    b = int(BAR_COLOR_TOP[2] * (1 - t) + BAR_COLOR_BOT[2] * t)
+                    pygame.draw.rect(surface, (r, g, b),
+                                     (bx, viz_y - j, bar_w - 2, 1))
 
         # ── Volume Overlay ──────────────────────────────────────
         self.volume_overlay.render(surface)

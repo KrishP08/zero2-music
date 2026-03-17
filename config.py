@@ -45,6 +45,7 @@ LIBRARY_CACHE_FILE = os.path.join(
 FONT_NAME = "Inter"
 FONT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "fonts")
 ICON_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "icons")
+NOW_PLAYING_THEME = "square"
 
 # ── Paths ───────────────────────────────────────────────────────────
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))

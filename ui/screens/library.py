@@ -5,7 +5,7 @@ Browse by Artists, Albums, or Songs with folder/file grouping.
 
 import os
 from ui.screen_manager import Screen
-from ui.theme import Colors, Fonts, draw_gradient_bg_cached, render_text, draw_rounded_rect
+from ui.theme import Colors, Fonts, draw_gradient_bg_cached, render_text, draw_rounded_rect, load_icon, tint_icon
 from ui.widgets import StatusBar, BottomNavBar, ScrollList
 from hardware.input_handler import InputAction
 import config
@@ -23,6 +23,14 @@ class LibraryScreen(Screen):
         self.bottom_nav.active_tab = 1  # Files tab
         self.scroll_list = None
         self._tracks = []
+        self.sort_mode = "name"
+        self._thumbnails = {}
+        
+        self._icons = {
+            "music": load_icon("music", size=(16, 16)),
+            "artist": load_icon("artist", size=(16, 16)),
+            "album": load_icon("album", size=(16, 16)),
+        }
 
     def on_enter(self):
         if self.scroll_list is None:
@@ -38,6 +46,19 @@ class LibraryScreen(Screen):
 
         if self.mode == "songs":
             self._tracks = library.get_all_tracks_sorted()
+            
+            if self.sort_mode == "date":
+                self._tracks.sort(key=lambda t: os.path.getmtime(t.filepath) if os.path.exists(t.filepath) else 0, reverse=True)
+            else:
+                self._tracks.sort(key=lambda t: t.display_title.lower())
+                
+            items.append({
+                "label": f"Sort: {'Name' if self.sort_mode == 'name' else 'Date Added'}",
+                "subtitle": "Click to toggle sort order",
+                "action": "toggle_sort",
+                "is_action": True,
+            })
+            
             for t in self._tracks:
                 ext = os.path.splitext(t.filepath)[1].upper().replace(".", "")
                 items.append({
@@ -50,12 +71,14 @@ class LibraryScreen(Screen):
 
         elif self.mode == "artists":
             for artist in library.artists:
-                count = len(library.get_tracks_by_artist(artist))
+                tracks = library.get_tracks_by_artist(artist)
+                count = len(tracks)
                 items.append({
                     "label": artist,
                     "subtitle": f"{count} track{'s' if count != 1 else ''}",
                     "key": artist,
                     "is_folder": True,
+                    "track": tracks[0] if tracks else None
                 })
             header = f"Artists ({len(items)})"
 
@@ -68,18 +91,21 @@ class LibraryScreen(Screen):
                     "subtitle": f"{artist} · {len(tracks)} tracks",
                     "key": album,
                     "is_folder": True,
+                    "track": tracks[0] if tracks else None
                 })
             header = f"Albums ({len(items)})"
 
         elif self.mode == "artist_albums":
             albums = library.get_albums_by_artist(self.filter_key)
             for album in albums:
-                count = len(library.get_tracks_by_album(album))
+                tracks = library.get_tracks_by_album(album)
+                count = len(tracks)
                 items.append({
                     "label": album,
                     "subtitle": f"{count} tracks",
                     "key": album,
                     "is_folder": True,
+                    "track": tracks[0] if tracks else None
                 })
             header = self.filter_key
 
@@ -123,6 +149,14 @@ class LibraryScreen(Screen):
         item = self.scroll_list.selected_item
         if not item:
             return
+            
+        action = item.get("action")
+        if action == "toggle_sort":
+            self.sort_mode = "date" if self.sort_mode == "name" else "name"
+            idx = self.scroll_list.selected_index
+            self._build_list()
+            self.scroll_list.selected_index = idx
+            return
 
         if self.mode == "artists":
             screen = LibraryScreen(self.app, mode="artist_albums", filter_key=item["key"])
@@ -136,12 +170,13 @@ class LibraryScreen(Screen):
         elif self.mode in ("songs", "album_songs"):
             track = item.get("track")
             if track:
-                idx = self.scroll_list.selected_index
-                self.app.playlist.set_tracks(self._tracks, start_index=idx)
-                self.app.audio.play(track.filepath)
-                from ui.screens.now_playing import NowPlayingScreen
-                screen = NowPlayingScreen(self.app)
-                self.app.screen_manager.push(screen)
+                if track in self._tracks:
+                    idx = self._tracks.index(track)
+                    self.app.playlist.set_tracks(self._tracks, start_index=idx)
+                    self.app.audio.play(track.filepath)
+                    from ui.screens.now_playing import NowPlayingScreen
+                    screen = NowPlayingScreen(self.app)
+                    self.app.screen_manager.push(screen)
 
     def update(self, dt):
         if self.scroll_list:
@@ -160,13 +195,14 @@ class LibraryScreen(Screen):
         subtitle = item.get("subtitle", "")
         badge = item.get("badge", "")
         is_folder = item.get("is_folder", False)
+        is_action = item.get("is_action", False)
 
         # Icon square
         icon_size = 28
         icon_x = x + 8
         icon_y = y + (h - icon_size) // 2
 
-        if is_folder:
+        if is_folder or is_action:
             bg_color = (*Colors.ACCENT[:3], 40)
         else:
             bg_color = (*Colors.BG_CARD[:3], 200)
@@ -174,42 +210,102 @@ class LibraryScreen(Screen):
         draw_rounded_rect(surface, bg_color,
                           (icon_x, icon_y, icon_size, icon_size), radius=5)
 
-        # Icon character
-        if is_folder:
-            render_text(surface, "📁", (icon_x + 4, icon_y + 4),
+        # Icon
+        if is_action:
+            render_text(surface, "↕", (icon_x + 8, icon_y + 4),
                         font=Fonts.body(), color=Colors.ACCENT)
         else:
-            render_text(surface, "♪", (icon_x + 7, icon_y + 5),
-                        font=Fonts.body(), color=Colors.TEXT_MUTED)
+            # Check for music thumbnail
+            track = item.get("track")
+            thumb = self._get_thumbnail(track) if track else None
+            
+            if thumb:
+                surface.blit(thumb, (icon_x, icon_y))
+            else:
+                # Determine which png to use
+                if is_folder and self.mode == "artists":
+                    icon_name = "artist"
+                elif is_folder and self.mode in ("albums", "artist_albums"):
+                    icon_name = "album"
+                else:
+                    icon_name = "music"
+                
+                icon_surf = self._icons.get(icon_name)
+                if icon_surf:
+                    color = Colors.ACCENT if is_folder else Colors.TEXT_MUTED
+                    tinted = tint_icon(icon_surf, color)
+                    surface.blit(tinted, (icon_x + 6, icon_y + 6))
+                else:
+                    # Fallback
+                    char = "📁" if is_folder else "♪"
+                    color = Colors.ACCENT if is_folder else Colors.TEXT_MUTED
+                    render_text(surface, char, (icon_x + (4 if is_folder else 7), icon_y + 4),
+                                font=Fonts.body(), color=color)
 
         # Text
         text_x = icon_x + icon_size + 8
-        label_color = Colors.TEXT_PRIMARY if selected else Colors.TEXT_SECONDARY
-        max_w = w - icon_size - 30
-
+        text_w = w - text_x - 10
         if badge:
-            max_w -= 36
+            text_w -= 32
 
-        render_text(surface, label, (text_x, y + 4),
-                    font=Fonts.body(), color=label_color, max_width=max_w)
+        render_text(surface, label,
+                    (text_x, y + 4 + (4 if not subtitle else 0)),
+                    font=Fonts.body(), color=Colors.TEXT_PRIMARY,
+                    max_width=text_w)
 
         if subtitle:
-            # Badge + subtitle
-            sub_x = text_x
-            if badge:
-                badge_color = Colors.BADGE_FLAC if badge in ("FLAC", "WAV") else Colors.BADGE_MP3
-                badge_w = Fonts.tiny().size(badge)[0] + 6
-                draw_rounded_rect(surface, (*badge_color[:3], 50),
-                                  (sub_x, y + 21, badge_w, 12), radius=3)
-                render_text(surface, badge, (sub_x + 3, y + 22),
-                            font=Fonts.tiny(), color=badge_color)
-                sub_x += badge_w + 4
+            render_text(surface, subtitle,
+                        (text_x, y + 22),
+                        font=Fonts.small(), color=Colors.TEXT_SECONDARY,
+                        max_width=text_w)
 
-            render_text(surface, subtitle, (sub_x, y + 22),
-                        font=Fonts.small(), color=Colors.TEXT_MUTED,
-                        max_width=max_w - (sub_x - text_x))
+        # Format Badge
+        if badge:
+            badge_w = 26
+            badge_h = 14
+            badge_x = x + w - badge_w - 6
+            badge_y = y + (h - badge_h) // 2
+            draw_rounded_rect(surface, (*Colors.ACCENT[:3], 30),
+                              (badge_x, badge_y, badge_w, badge_h), radius=3)
+            render_text(surface, badge[:4],
+                        (badge_x + 2, badge_y + 1),
+                        font=Fonts.tiny(), color=Colors.ACCENT)
 
         # Chevron for folders
         if is_folder and selected:
             render_text(surface, "›", (x + w - 14, y + (h - 14) // 2),
                         font=Fonts.body(), color=Colors.ACCENT)
+
+    def _get_thumbnail(self, track):
+        if not track:
+            return None
+            
+        if track.filepath not in self._thumbnails:
+            self._thumbnails[track.filepath] = "LOADING"
+            
+            def load_thumb():
+                art_bytes = track.get_album_art_bytes()
+                if art_bytes:
+                    try:
+                        import pygame
+                        from io import BytesIO
+                        img = pygame.image.load(BytesIO(art_bytes))
+                        thumb = pygame.transform.smoothscale(img, (28, 28))
+                        
+                        # Apply rounded mask
+                        mask = pygame.Surface((28, 28), pygame.SRCALPHA)
+                        pygame.draw.rect(mask, (255, 255, 255, 255), (0, 0, 28, 28), border_radius=5)
+                        thumb_masked = thumb.convert_alpha()
+                        thumb_masked.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MIN)
+                        
+                        self._thumbnails[track.filepath] = thumb_masked
+                    except Exception:
+                        self._thumbnails[track.filepath] = None
+                else:
+                    self._thumbnails[track.filepath] = None
+                    
+            import threading
+            threading.Thread(target=load_thumb, daemon=True).start()
+            
+        val = self._thumbnails.get(track.filepath)
+        return val if val != "LOADING" else None

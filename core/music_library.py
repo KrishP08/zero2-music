@@ -46,8 +46,38 @@ class Track:
         return f"{m}:{s:02d}"
 
     def get_album_art_bytes(self):
-        """Return raw album art image bytes, or None."""
-        return self._album_art_data
+        """Return raw album art image bytes, or None. Lazy loads if not cached."""
+        if self._album_art_data is not None:
+            return self._album_art_data
+
+        try:
+            from mutagen import File as MutagenFile
+            audio = MutagenFile(self.filepath)
+            if audio is None:
+                return None
+            
+            # ID3 (MP3)
+            if hasattr(audio, "tags") and audio.tags:
+                for key in audio.tags:
+                    if key.startswith("APIC"):
+                        self._album_art_data = audio.tags[key].data
+                        return self._album_art_data
+            
+            # FLAC
+            if hasattr(audio, "pictures") and audio.pictures:
+                self._album_art_data = audio.pictures[0].data
+                return self._album_art_data
+            
+            # M4A/MP4
+            if hasattr(audio, "tags") and audio.tags and "covr" in audio.tags:
+                covers = audio.tags["covr"]
+                if covers:
+                    self._album_art_data = bytes(covers[0])
+                    return self._album_art_data
+        except Exception as e:
+            pass
+            
+        return None
 
     def to_dict(self):
         return {
@@ -137,9 +167,6 @@ class MusicLibrary:
             if audio.info:
                 duration = audio.info.length
 
-            # Get album art (need to reopen without easy=True)
-            art_data = self._extract_album_art(filepath)
-
             return Track(
                 filepath=filepath,
                 title=title,
@@ -148,38 +175,11 @@ class MusicLibrary:
                 duration=duration,
                 track_num=track_num,
                 genre=genre,
-                album_art_data=art_data,
+                album_art_data=None, # Loaded lazily later
             )
         except Exception as e:
             print(f"[Library] Error reading {filepath}: {e}")
             return Track(filepath)
-
-    def _extract_album_art(self, filepath):
-        """Extract album art bytes from an audio file."""
-        try:
-            audio = MutagenFile(filepath)
-            if audio is None:
-                return None
-
-            # MP3 with ID3 tags
-            if hasattr(audio, "tags") and audio.tags:
-                for key in audio.tags:
-                    if key.startswith("APIC"):
-                        return audio.tags[key].data
-
-            # FLAC
-            if hasattr(audio, "pictures") and audio.pictures:
-                return audio.pictures[0].data
-
-            # MP4/M4A
-            if hasattr(audio, "tags") and audio.tags and "covr" in audio.tags:
-                covers = audio.tags["covr"]
-                if covers:
-                    return bytes(covers[0])
-
-        except Exception:
-            pass
-        return None
 
     # ── Getters ─────────────────────────────────────────────────────
     @property

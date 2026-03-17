@@ -32,6 +32,7 @@ from hardware.display import Display
 from hardware.input_handler import InputHandler, InputAction
 from ui.screen_manager import ScreenManager
 from ui.screens.main_menu import MainMenuScreen
+from core.cava_visualizer import CavaVisualizer
 
 
 class App:
@@ -74,6 +75,10 @@ class App:
         # ── WiFi ────────────────────────────────────────────────
         self.wifi = WiFiManager()
         print(f"[App] WiFi: {'available' if self.wifi.available else 'not available'}")
+
+        # ── Visualizer ──────────────────────────────────────────
+        self.cava = CavaVisualizer(bars=32)
+        self.cava.start()
 
         # ── Input ───────────────────────────────────────────────
         self.input = InputHandler()
@@ -131,6 +136,7 @@ class App:
     def _cleanup(self):
         """Graceful shutdown."""
         print("[App] Shutting down...")
+        self.cava.stop()
         self.audio.cleanup()
         self.bluetooth.cleanup()
         self.wifi.cleanup()

@@ -24,7 +24,7 @@ class SettingsScreen(Screen):
         self._load_icons()
 
     def _load_icons(self):
-        for name in ("wifi", "bluetooth", "settings", "album"):
+        for name in ("wifi", "bluetooth", "settings", "album", "repeat"):
             icon = load_icon(name, size=(18, 18))
             if icon:
                 self._icons[name] = icon
@@ -42,6 +42,13 @@ class SettingsScreen(Screen):
         wifi_net = wifi.get_current_network() if wifi.available else None
 
         self._cards = [
+            {
+                "label": "Theme",
+                "subtitle": getattr(config, "NOW_PLAYING_THEME", "square").title(),
+                "icon": "settings",
+                "enabled": getattr(config, "NOW_PLAYING_THEME", "square") == "round",
+                "action": "theme",
+            },
             {
                 "label": "WiFi",
                 "subtitle": wifi_net or "Not connected",
@@ -62,6 +69,13 @@ class SettingsScreen(Screen):
                 "icon": "settings",
                 "enabled": self.app.playlist.shuffle,
                 "action": "shuffle",
+            },
+            {
+                "label": "Repeat",
+                "subtitle": self.app.playlist.repeat_label,
+                "icon": "repeat",
+                "enabled": self.app.playlist.repeat != 0,
+                "action": "repeat",
             },
             {
                 "label": "About",
@@ -102,8 +116,21 @@ class SettingsScreen(Screen):
         elif action == "bluetooth":
             from ui.screens.bluetooth import BluetoothScreen
             self.app.screen_manager.push(BluetoothScreen(self.app))
+        elif action == "theme":
+            current = getattr(config, "NOW_PLAYING_THEME", "square")
+            config.NOW_PLAYING_THEME = "round" if current == "square" else "square"
+            self._build_cards()
         elif action == "shuffle":
             self.app.playlist.toggle_shuffle()
+            self._build_cards()
+        elif action == "repeat":
+            from core.playlist import RepeatMode
+            if self.app.playlist.repeat == RepeatMode.OFF:
+                self.app.playlist.repeat = RepeatMode.ALL
+            elif self.app.playlist.repeat == RepeatMode.ALL:
+                self.app.playlist.repeat = RepeatMode.ONE
+            else:
+                self.app.playlist.repeat = RepeatMode.OFF
             self._build_cards()
         elif action == "about":
             from ui.screens.about import AboutScreen
@@ -135,15 +162,24 @@ class SettingsScreen(Screen):
         card_h = 72
         gap = 8
 
+        # Calculate scrolling offset
+        target_row = self.selected_index // 2
+        scroll_offset = max(0, (target_row - 1) * (card_h + gap))
+        
+        # Set clipping area so scrolled cards don't draw over the header
+        clip_rect = pygame.Rect(x_offset, grid_y - 2, config.SCREEN_WIDTH, config.SCREEN_HEIGHT - grid_y - 32)
+        surface.set_clip(clip_rect)
+
         for i, card in enumerate(self._cards):
             col = i % 2
             row = i // 2
             cx = grid_x + col * (card_w + gap)
-            cy = grid_y + row * (card_h + gap)
+            cy = grid_y + row * (card_h + gap) - scroll_offset
             selected = (i == self.selected_index)
 
             self._render_card(surface, card, (cx, cy, card_w, card_h), selected)
 
+        surface.set_clip(None)
         self.bottom_nav.render(surface, x_offset)
 
     def _render_card(self, surface, card, rect, selected):
