@@ -1,5 +1,6 @@
 """
-About Screen — shows device info: hostname, IP, storage, uptime, version.
+About Screen — Tack UI landscape layout.
+Shows device info: hostname, IP, storage, uptime, version.
 """
 
 import subprocess
@@ -7,7 +8,7 @@ import os
 
 from ui.screen_manager import Screen
 from ui.theme import Colors, Fonts, draw_gradient_bg_cached, render_text, draw_rounded_rect
-from ui.widgets import StatusBar, ScrollList
+from ui.widgets import StatusBar, BottomNavBar, ScrollList
 from hardware.input_handler import InputAction
 
 
@@ -17,10 +18,15 @@ class AboutScreen(Screen):
     def __init__(self, app):
         super().__init__(app)
         self.status_bar = StatusBar()
+        self.bottom_nav = BottomNavBar()
+        self.bottom_nav.active_tab = 3
         self.scroll_list = None
 
     def on_enter(self):
         self._build_info()
+
+    def on_resume(self):
+        pass
 
     def _build_info(self):
         items = [
@@ -36,7 +42,8 @@ class AboutScreen(Screen):
 
         self.scroll_list = ScrollList(
             items, header="About",
-            item_renderer=self._render_item
+            item_renderer=self._render_item,
+            bottom_margin=BottomNavBar.HEIGHT,
         )
 
     def _get_hostname(self):
@@ -83,6 +90,7 @@ class AboutScreen(Screen):
         self.status_bar.render(surface, x_offset)
         if self.scroll_list:
             self.scroll_list.render(surface, x_offset)
+        self.bottom_nav.render(surface, x_offset)
 
     def _render_item(self, surface, item, rect, selected, x_offset):
         x, y, w, h = rect
@@ -90,12 +98,12 @@ class AboutScreen(Screen):
         value = item.get("value", "")
 
         label_color = Colors.TEXT_PRIMARY if selected else Colors.TEXT_SECONDARY
-        render_text(surface, label, (x + 14, y + (h - 16) // 2),
+        render_text(surface, label, (x + 12, y + (h - 14) // 2),
                     font=Fonts.body(), color=label_color)
 
         if value:
             val_color = Colors.ACCENT if selected else Colors.TEXT_MUTED
             val_w = Fonts.small().size(value)[0]
             render_text(surface, value,
-                        (x + w - val_w - 10, y + (h - 13) // 2),
+                        (x + w - val_w - 8, y + (h - 10) // 2),
                         font=Fonts.small(), color=val_color)

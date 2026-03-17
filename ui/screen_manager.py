@@ -15,7 +15,7 @@ class ScreenManager:
         self._stack = []
         self._transition = None
         self._transition_progress = 0.0
-        self._transition_speed = 8.0  # in units per frame (0→1 scale)
+        self._transition_speed = 8.0
         self._transition_from_surface = None
         self._transition_to_surface = None
 
@@ -35,7 +35,7 @@ class ScreenManager:
     def pop(self, animate=True):
         """Pop the top screen with a slide-right transition."""
         if len(self._stack) <= 1:
-            return  # Don't pop the root screen
+            return
 
         old_screen = self._stack.pop()
         old_screen.on_exit()
@@ -44,7 +44,8 @@ class ScreenManager:
             self._start_transition("slide_right", None, old_screen)
 
         if self._stack:
-            self._stack[-1].on_enter()
+            # Call on_resume instead of on_enter to preserve state
+            self._stack[-1].on_resume()
 
     def replace(self, screen, animate=False):
         """Replace the current screen."""
@@ -57,7 +58,7 @@ class ScreenManager:
     def handle_input(self, action):
         """Forward input to the current screen."""
         if self._transition:
-            return  # Ignore input during transitions
+            return
         if self.current_screen:
             self.current_screen.handle_input(action)
 
@@ -77,24 +78,19 @@ class ScreenManager:
         w = config.SCREEN_WIDTH
 
         if self._transition and self._transition_from_surface:
-            # Ease-out cubic
             t = self._transition_progress
             t = 1.0 - (1.0 - t) ** 3
 
             if self._transition == "slide_left":
-                # Old screen slides left, new screen slides in from right
                 offset_old = int(-w * t)
                 offset_new = int(w * (1.0 - t))
-
                 surface.blit(self._transition_from_surface, (offset_old, 0))
                 if self.current_screen:
                     self.current_screen.render(surface, x_offset=offset_new)
 
             elif self._transition == "slide_right":
-                # Old screen slides right, previous screen slides in from left
                 offset_old = int(w * t)
                 offset_new = int(-w * (1.0 - t))
-
                 surface.blit(self._transition_from_surface, (offset_old, 0))
                 if self.current_screen:
                     self.current_screen.render(surface, x_offset=offset_new)
@@ -107,7 +103,6 @@ class ScreenManager:
         self._transition = direction
         self._transition_progress = 0.0
 
-        # Capture current screen to a surface
         self._transition_from_surface = pygame.Surface(
             (config.SCREEN_WIDTH, config.SCREEN_HEIGHT)
         )
@@ -121,14 +116,14 @@ class Screen:
     """Base class for all screens."""
 
     def __init__(self, app):
-        """
-        Args:
-            app: reference to the main App for accessing audio, library, etc.
-        """
         self.app = app
 
     def on_enter(self):
-        """Called when screen becomes active."""
+        """Called when screen becomes active for the first time."""
+        pass
+
+    def on_resume(self):
+        """Called when screen becomes active again after a pop (preserves state)."""
         pass
 
     def on_exit(self):

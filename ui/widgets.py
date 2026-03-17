@@ -1,6 +1,6 @@
 """
-Widgets — reusable UI components for the Y1-inspired interface.
-ScrollList, ProgressBar, StatusBar, GlassPanel, etc.
+Widgets — Tack UI components for the landscape 320×240 interface.
+StatusBar, BottomNavBar, ScrollList, VolumeOverlay, PlaybackControls.
 """
 
 import pygame
@@ -14,90 +14,131 @@ from ui.theme import (
 )
 
 
+# ════════════════════════════════════════════════════════════════════
+#  STATUS BAR  — compact top bar (time, BT, WiFi, battery)
+# ════════════════════════════════════════════════════════════════════
 class StatusBar:
-    """Top status bar showing time and status icons."""
+    """Compact top status bar — 24px tall."""
 
-    HEIGHT = 28
+    HEIGHT = 24
 
     def __init__(self):
-        self._bt_icon = load_icon("bluetooth", size=(14, 14))
-        self._wifi_icon = load_icon("wifi", size=(14, 14))
-        self._music_icon = load_icon("music", size=(14, 14))
+        self._bt_icon = load_icon("bluetooth", size=(12, 12))
+        self._wifi_icon = load_icon("wifi", size=(12, 12))
+        self._battery_icon = load_icon("battery", size=(14, 14))
+
+    def render(self, surface, x_offset=0, title=None, show_back=False):
+        # Bar background
+        bar_rect = (x_offset, 0, config.SCREEN_WIDTH, self.HEIGHT)
+        draw_rounded_rect(surface, (10, 14, 22, 220), bar_rect, radius=0)
+
+        # Left side: title or time
+        if title:
+            render_text(surface, title,
+                        (x_offset + (28 if show_back else 8), 4),
+                        font=Fonts.tiny(), color=Colors.TEXT_MUTED)
+        else:
+            now = time.strftime("%H:%M")
+            render_text(surface, now,
+                        (x_offset + 8, 4),
+                        font=Fonts.tiny(), color=Colors.TEXT_MUTED)
+
+        # Right side icons
+        ix = x_offset + config.SCREEN_WIDTH - 8
+
+        # Battery
+        if self._battery_icon:
+            ix -= 14
+            tinted = tint_icon(self._battery_icon, Colors.BATTERY_GREEN)
+            surface.blit(tinted, (ix, 5))
+
+        # WiFi
+        if self._wifi_icon:
+            ix -= 16
+            tinted = tint_icon(self._wifi_icon, Colors.TEXT_MUTED)
+            surface.blit(tinted, (ix, 6))
+
+        # Bluetooth
+        if self._bt_icon:
+            ix -= 16
+            tinted = tint_icon(self._bt_icon, Colors.TEXT_MUTED)
+            surface.blit(tinted, (ix, 6))
+
+
+# ════════════════════════════════════════════════════════════════════
+#  BOTTOM NAV BAR  — 4 tabs
+# ════════════════════════════════════════════════════════════════════
+class BottomNavBar:
+    """Persistent bottom navigation — Home, Files, Music, Settings."""
+
+    HEIGHT = 36
+
+    TABS = [
+        {"label": "Home", "icon": "music"},
+        {"label": "Files", "icon": "album"},
+        {"label": "Playing", "icon": "now_playing"},
+        {"label": "Settings", "icon": "settings"},
+    ]
+
+    def __init__(self):
+        self.active_tab = 0
+        self._icons = {}
+        for tab in self.TABS:
+            icon = load_icon(tab["icon"], size=(18, 18))
+            if icon:
+                self._icons[tab["icon"]] = icon
 
     def render(self, surface, x_offset=0):
-        # Semi-transparent bar
-        bar_rect = (x_offset, 0, config.SCREEN_WIDTH, self.HEIGHT)
-        draw_rounded_rect(surface, (10, 14, 28, 200), bar_rect, radius=0)
+        y = config.SCREEN_HEIGHT - self.HEIGHT
+        w = config.SCREEN_WIDTH
 
-        # Time
-        now = time.strftime("%H:%M")
-        render_text(
-            surface, now,
-            (x_offset + config.SCREEN_WIDTH // 2, self.HEIGHT // 2),
-            font=Fonts.small(),
-            color=Colors.TEXT_PRIMARY,
-            center=True
-        )
+        # Background
+        bg_rect = (x_offset, y, w, self.HEIGHT)
+        draw_rounded_rect(surface, (10, 15, 22, 230), bg_rect, radius=0)
 
-        # Music note icon on left
-        if self._music_icon:
-            tinted = tint_icon(self._music_icon, Colors.ACCENT)
-            surface.blit(tinted, (x_offset + 8, 7))
-        else:
-            render_text(
-                surface, "♪",
-                (x_offset + 10, 6),
-                font=Fonts.small(),
-                color=Colors.ACCENT
-            )
+        # Top border
+        pygame.draw.line(surface, Colors.DIVIDER,
+                         (x_offset, y), (x_offset + w, y))
 
-        # Right-side status icons
-        icon_x = x_offset + config.SCREEN_WIDTH - 12
+        # Tabs
+        tab_w = w // len(self.TABS)
+        for i, tab in enumerate(self.TABS):
+            tx = x_offset + i * tab_w + tab_w // 2
+            ty = y + 8
+            is_active = (i == self.active_tab)
 
-        # WiFi icon
-        if self._wifi_icon:
-            # Get live status from app (injected via global or just show icon)
-            tinted = tint_icon(self._wifi_icon, Colors.ACCENT)
-            icon_x -= 16
-            surface.blit(tinted, (icon_x, 7))
-
-        # Bluetooth icon
-        if self._bt_icon:
-            tinted = tint_icon(self._bt_icon, Colors.ACCENT)
-            icon_x -= 18
-            surface.blit(tinted, (icon_x, 7))
-
-        # Subtle bottom divider
-        pygame.draw.line(
-            surface, Colors.DIVIDER,
-            (x_offset, self.HEIGHT - 1),
-            (x_offset + config.SCREEN_WIDTH, self.HEIGHT - 1)
-        )
+            # Icon
+            icon_surf = self._icons.get(tab["icon"])
+            if icon_surf:
+                color = Colors.ACCENT if is_active else Colors.TEXT_MUTED
+                tinted = tint_icon(icon_surf, color)
+                surface.blit(tinted, (tx - 9, ty))
+            
+            # Active dot
+            if is_active:
+                pygame.draw.circle(surface, Colors.ACCENT,
+                                   (tx, ty + 24), 2)
 
 
+# ════════════════════════════════════════════════════════════════════
+#  SCROLL LIST  — smooth scrolling vertical list
+# ════════════════════════════════════════════════════════════════════
 class ScrollList:
-    """
-    A smooth-scrolling vertical list with Y1-style highlight.
-    Used for menus, song lists, etc.
-    """
+    """Smooth-scrolling vertical list with Tack-style highlight."""
 
-    ITEM_HEIGHT = 44
-    PADDING_X = 16
-    VISIBLE_AREA_TOP = StatusBar.HEIGHT + 36  # after status bar + header
+    ITEM_HEIGHT = 40
+    PADDING_X = 12
 
-    def __init__(self, items, header="", item_renderer=None):
-        """
-        Args:
-            items: list of dicts with at least 'label' key
-            header: section header text
-            item_renderer: optional custom render function(surface, item, rect, selected)
-        """
+    def __init__(self, items, header="", item_renderer=None,
+                 top_offset=None, bottom_margin=0):
         self.items = items
         self.header = header
         self.selected_index = 0
-        self._scroll_offset = 0.0          # smooth scroll pixel offset
+        self._scroll_offset = 0.0
         self._target_scroll = 0.0
         self._item_renderer = item_renderer
+        self._top_offset = top_offset or (StatusBar.HEIGHT + 28)
+        self._bottom_margin = bottom_margin
 
     @property
     def selected_item(self):
@@ -116,8 +157,7 @@ class ScrollList:
             self._ensure_visible()
 
     def _ensure_visible(self):
-        """Adjust scroll target so selected item is visible."""
-        visible_h = config.SCREEN_HEIGHT - self.VISIBLE_AREA_TOP - 10
+        visible_h = config.SCREEN_HEIGHT - self._top_offset - self._bottom_margin - 10
         item_top = self.selected_index * self.ITEM_HEIGHT
         item_bottom = item_top + self.ITEM_HEIGHT
 
@@ -127,100 +167,93 @@ class ScrollList:
             self._target_scroll = item_bottom - visible_h
 
     def update(self, dt):
-        """Smooth scroll animation."""
         diff = self._target_scroll - self._scroll_offset
         self._scroll_offset += diff * min(1.0, dt * 12.0)
 
     def render(self, surface, x_offset=0):
-        top = self.VISIBLE_AREA_TOP
+        top = self._top_offset
 
         # Header
         if self.header:
             render_text(
                 surface, self.header,
-                (x_offset + self.PADDING_X, StatusBar.HEIGHT + 6),
+                (x_offset + self.PADDING_X, StatusBar.HEIGHT + 4),
                 font=Fonts.title(),
                 color=Colors.TEXT_PRIMARY
             )
 
-        # Clip area for list
-        clip_rect = pygame.Rect(
-            x_offset, top,
-            config.SCREEN_WIDTH, config.SCREEN_HEIGHT - top
-        )
+        # Clip area
+        clip_bottom = config.SCREEN_HEIGHT - self._bottom_margin
+        clip_rect = pygame.Rect(x_offset, top, config.SCREEN_WIDTH, clip_bottom - top)
         surface.set_clip(clip_rect)
 
         for i, item in enumerate(self.items):
             y = top + i * self.ITEM_HEIGHT - int(self._scroll_offset)
 
-            # Skip items outside visible area
-            if y + self.ITEM_HEIGHT < top or y > config.SCREEN_HEIGHT:
+            if y + self.ITEM_HEIGHT < top or y > clip_bottom:
                 continue
 
             item_rect = (
-                x_offset + 8, y + 2,
-                config.SCREEN_WIDTH - 16, self.ITEM_HEIGHT - 4
+                x_offset + 6, y + 2,
+                config.SCREEN_WIDTH - 12, self.ITEM_HEIGHT - 4
             )
             selected = (i == self.selected_index)
 
             if selected:
-                # Highlighted background — cyan glass
-                draw_rounded_rect(surface, (*Colors.ACCENT[:3], 25),
-                                  item_rect, radius=10)
+                draw_rounded_rect(surface, (*Colors.ACCENT[:3], 20),
+                                  item_rect, radius=8)
                 # Left accent bar
                 pygame.draw.rect(
                     surface, Colors.ACCENT,
-                    (x_offset + 8, y + 8, 3, self.ITEM_HEIGHT - 16),
+                    (x_offset + 6, y + 8, 3, self.ITEM_HEIGHT - 16),
                     border_radius=2
                 )
 
             if self._item_renderer:
                 self._item_renderer(surface, item, item_rect, selected, x_offset)
             else:
-                # Default renderer — label + optional subtitle
-                label_color = Colors.TEXT_PRIMARY if selected else Colors.TEXT_SECONDARY
-                render_text(
-                    surface, item.get("label", ""),
-                    (x_offset + self.PADDING_X + 10, y + 8),
-                    font=Fonts.body(),
-                    color=label_color,
-                    max_width=config.SCREEN_WIDTH - 50
-                )
-                if "subtitle" in item:
-                    render_text(
-                        surface, item["subtitle"],
-                        (x_offset + self.PADDING_X + 10, y + 25),
-                        font=Fonts.small(),
-                        color=Colors.TEXT_MUTED,
-                        max_width=config.SCREEN_WIDTH - 50
-                    )
+                self._default_render(surface, item, item_rect, selected, x_offset)
 
         surface.set_clip(None)
+        self._render_scrollbar(surface, top, x_offset, clip_bottom)
 
-        # Scroll indicator
-        self._render_scrollbar(surface, top, x_offset)
+    def _default_render(self, surface, item, rect, selected, x_offset):
+        x, y, w, h = rect
+        label_color = Colors.TEXT_PRIMARY if selected else Colors.TEXT_SECONDARY
+        render_text(
+            surface, item.get("label", ""),
+            (x + self.PADDING_X + 6, y + 5),
+            font=Fonts.body(), color=label_color,
+            max_width=config.SCREEN_WIDTH - 50
+        )
+        if "subtitle" in item:
+            render_text(
+                surface, item["subtitle"],
+                (x + self.PADDING_X + 6, y + 21),
+                font=Fonts.small(), color=Colors.TEXT_MUTED,
+                max_width=config.SCREEN_WIDTH - 50
+            )
 
-    def _render_scrollbar(self, surface, top, x_offset):
-        """Draw a thin scrollbar indicator."""
+    def _render_scrollbar(self, surface, top, x_offset, bottom):
         if len(self.items) <= 0:
             return
-
         total_h = len(self.items) * self.ITEM_HEIGHT
-        visible_h = config.SCREEN_HEIGHT - top
+        visible_h = bottom - top
         if total_h <= visible_h:
             return
-
-        bar_h = max(20, int(visible_h * visible_h / total_h))
+        bar_h = max(16, int(visible_h * visible_h / total_h))
         bar_y = top + int(self._scroll_offset / total_h * visible_h)
-        bar_y = min(bar_y, config.SCREEN_HEIGHT - bar_h)
-
+        bar_y = min(bar_y, bottom - bar_h)
         draw_rounded_rect(
-            surface, (*Colors.ACCENT[:3], 60),
+            surface, (*Colors.ACCENT[:3], 50),
             (x_offset + config.SCREEN_WIDTH - 4, bar_y, 3, bar_h),
             radius=2
         )
 
 
+# ════════════════════════════════════════════════════════════════════
+#  VOLUME OVERLAY
+# ════════════════════════════════════════════════════════════════════
 class VolumeOverlay:
     """Semi-transparent volume popup that auto-dismisses."""
 
@@ -249,22 +282,16 @@ class VolumeOverlay:
         if not self._visible:
             return
 
-        # Center overlay
-        w, h = 180, 50
+        w, h = 160, 40
         x = (config.SCREEN_WIDTH - w) // 2
         y = config.SCREEN_HEIGHT - 80
 
-        draw_glass_panel(surface, (x, y, w, h), radius=14)
-
-        # Volume icon
-        icon_text = "🔊" if self._volume > 0.5 else ("🔉" if self._volume > 0 else "🔇")
-        render_text(surface, icon_text, (x + 12, y + 14),
-                    font=Fonts.body(), color=Colors.TEXT_PRIMARY)
+        draw_glass_panel(surface, (x, y, w, h), radius=12)
 
         # Volume bar
-        bar_x = x + 42
-        bar_y = y + 20
-        bar_w = w - 56
+        bar_x = x + 12
+        bar_y = y + 16
+        bar_w = w - 50
         bar_h = 6
         draw_progress_bar(surface, (bar_x, bar_y, bar_w, bar_h),
                           self._volume, glow=True)
@@ -272,51 +299,52 @@ class VolumeOverlay:
         # Percentage
         pct = f"{int(self._volume * 100)}%"
         render_text(surface, pct,
-                    (x + w - 8, y + 15),
+                    (x + w - 34, y + 12),
                     font=Fonts.small(), color=Colors.TEXT_SECONDARY)
 
 
+# ════════════════════════════════════════════════════════════════════
+#  PLAYBACK CONTROLS  — landscape horizontal controls
+# ════════════════════════════════════════════════════════════════════
 class PlaybackControls:
-    """
-    Playback control icons: prev / play-pause / next.
-    Renders as circular icon buttons.
-    """
+    """Horizontal playback control row: shuffle, prev, play/pause, next, playlist."""
 
     def __init__(self):
         self.selected = 1  # 0=prev, 1=play/pause, 2=next
 
-    def render(self, surface, y, is_playing=False, x_offset=0):
-        center_x = x_offset + config.SCREEN_WIDTH // 2
-        spacing = 54
-        button_r = 18
-        main_r = 24
+    def render(self, surface, rect, is_playing=False, x_offset=0):
+        """Render controls within a given rect area."""
+        x, y, w, h = rect
+        center_y = y + h // 2
+        center_x = x + w // 2 + x_offset
+
+        spacing = 36
+        main_r = 18
+        side_r = 12
 
         buttons = [
-            ("⏮", center_x - spacing, button_r),
+            ("⏮", center_x - spacing, side_r),
             ("⏸" if is_playing else "▶", center_x, main_r),
-            ("⏭", center_x + spacing, button_r),
+            ("⏭", center_x + spacing, side_r),
         ]
 
         for i, (icon, bx, br) in enumerate(buttons):
             selected = (i == self.selected)
 
-            if selected:
-                # Glow behind selected button
-                glow_surf = pygame.Surface((br * 4, br * 4), pygame.SRCALPHA)
-                pygame.draw.circle(glow_surf, (*Colors.ACCENT[:3], 30),
-                                   (br * 2, br * 2), br * 2)
-                surface.blit(glow_surf, (bx - br * 2, y - br * 2))
+            if selected and i == 1:
+                # Main play button with accent fill
+                pygame.draw.circle(surface, Colors.ACCENT, (bx, center_y), br)
+                glow_surf = pygame.Surface((br * 3, br * 3), pygame.SRCALPHA)
+                pygame.draw.circle(glow_surf, (*Colors.ACCENT[:3], 40),
+                                   (br * 3 // 2, br * 3 // 2), br * 3 // 2)
+                surface.blit(glow_surf, (bx - br * 3 // 2, center_y - br * 3 // 2))
+                pygame.draw.circle(surface, Colors.ACCENT, (bx, center_y), br)
+                icon_color = Colors.BG_DARK
+            else:
+                if i == 1:
+                    pygame.draw.circle(surface, Colors.BG_CARD_HIGHLIGHT, (bx, center_y), br)
+                icon_color = Colors.TEXT_PRIMARY if selected else Colors.TEXT_SECONDARY
 
-            # Button circle
-            color = Colors.ACCENT if selected else Colors.BG_CARD_HIGHLIGHT
-            pygame.draw.circle(surface, color, (bx, y), br)
-
-            # Border
-            if not selected:
-                pygame.draw.circle(surface, Colors.DIVIDER, (bx, y), br, width=1)
-
-            # Icon text
-            icon_color = Colors.BG_DARK if selected else Colors.TEXT_SECONDARY
-            render_text(surface, icon, (bx, y),
+            render_text(surface, icon, (bx, center_y),
                         font=Fonts.body() if i != 1 else Fonts.title(),
                         color=icon_color, center=True)

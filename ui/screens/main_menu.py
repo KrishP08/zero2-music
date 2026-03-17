@@ -1,23 +1,23 @@
 """
-Main Menu Screen — Y1-style vertical menu with icons.
+Main Menu Screen — Tack UI Home tab.
 """
 
 import pygame
 from ui.screen_manager import Screen
-from ui.theme import Colors, Fonts, draw_gradient_bg_cached, render_text, draw_rounded_rect, load_icon
-from ui.widgets import StatusBar, ScrollList
+from ui.theme import Colors, Fonts, draw_gradient_bg_cached, render_text, draw_rounded_rect, load_icon, tint_icon
+from ui.widgets import StatusBar, BottomNavBar, ScrollList
 from hardware.input_handler import InputAction
 import config
 
 
 class MainMenuScreen(Screen):
-    """Root menu screen with iPod/Y1-style navigation."""
+    """Home screen with vertical menu + bottom nav."""
 
     MENU_ITEMS = [
-        {"label": "Music",       "icon_name": "music",       "action": "music"},
-        {"label": "Now Playing", "icon_name": "now_playing",  "action": "now_playing"},
+        {"label": "All Songs",   "icon_name": "music",       "action": "music"},
         {"label": "Artists",     "icon_name": "artist",      "action": "artists"},
         {"label": "Albums",      "icon_name": "album",       "action": "albums"},
+        {"label": "Now Playing", "icon_name": "now_playing",  "action": "now_playing"},
         {"label": "Bluetooth",   "icon_name": "bluetooth",   "action": "bluetooth"},
         {"label": "WiFi",        "icon_name": "wifi",        "action": "wifi"},
         {"label": "Settings",    "icon_name": "settings",    "action": "settings"},
@@ -26,20 +26,22 @@ class MainMenuScreen(Screen):
     def __init__(self, app):
         super().__init__(app)
         self.status_bar = StatusBar()
+        self.bottom_nav = BottomNavBar()
+        self.bottom_nav.active_tab = 0
         self._icons = {}
         self._load_icons()
         self.menu_list = ScrollList(
             self.MENU_ITEMS,
             header="Zero2 Music",
-            item_renderer=self._render_menu_item
+            item_renderer=self._render_menu_item,
+            bottom_margin=BottomNavBar.HEIGHT,
         )
 
     def _load_icons(self):
-        """Pre-load all menu icons."""
         for item in self.MENU_ITEMS:
             name = item.get("icon_name", "")
             if name:
-                icon = load_icon(name, size=(22, 22))
+                icon = load_icon(name, size=(20, 20))
                 if icon:
                     self._icons[name] = icon
 
@@ -96,42 +98,34 @@ class MainMenuScreen(Screen):
         draw_gradient_bg_cached(surface)
         self.status_bar.render(surface, x_offset)
         self.menu_list.render(surface, x_offset)
+        self.bottom_nav.render(surface, x_offset)
 
     def _render_menu_item(self, surface, item, rect, selected, x_offset):
-        """Custom renderer with PNG icons."""
         x, y, w, h = rect
         icon_name = item.get("icon_name", "")
         label = item.get("label", "")
 
-        # Icon (PNG)
+        # Icon background square
+        icon_bg_size = 28
+        icon_bg_x = x + 10
+        icon_bg_y = y + (h - icon_bg_size) // 2
+        bg_color = (*Colors.ACCENT[:3], 40) if selected else (*Colors.BG_CARD[:3], 180)
+        draw_rounded_rect(surface, bg_color,
+                          (icon_bg_x, icon_bg_y, icon_bg_size, icon_bg_size), radius=6)
+
+        # Icon
         icon_surf = self._icons.get(icon_name)
         if icon_surf:
-            # Tint icon: cyan when selected, muted otherwise
-            tinted = icon_surf.copy()
-            if selected:
-                tint_color = Colors.ACCENT
-            else:
-                tint_color = Colors.TEXT_MUTED
-            tint_overlay = pygame.Surface(tinted.get_size(), pygame.SRCALPHA)
-            tint_overlay.fill((*tint_color[:3], 0))
-            # Use the icon alpha channel with desired color
-            for px in range(tinted.get_width()):
-                for py in range(tinted.get_height()):
-                    r, g, b, a = tinted.get_at((px, py))
-                    if a > 0:
-                        tinted.set_at((px, py), (*tint_color[:3], a))
-            icon_y = y + (h - 22) // 2
-            surface.blit(tinted, (x + 12, icon_y))
-        else:
-            # Fallback: no icon
-            pass
+            color = Colors.ACCENT if selected else Colors.TEXT_MUTED
+            tinted = tint_icon(icon_surf, color)
+            surface.blit(tinted, (icon_bg_x + 4, icon_bg_y + 4))
 
         # Label
         label_color = Colors.TEXT_PRIMARY if selected else Colors.TEXT_SECONDARY
-        render_text(surface, label, (x + 42, y + (h - 16) // 2),
+        render_text(surface, label, (x + 46, y + (h - 14) // 2),
                     font=Fonts.body(), color=label_color)
 
-        # Right arrow for selected
+        # Chevron
         if selected:
-            render_text(surface, "›", (x + w - 20, y + (h - 18) // 2),
-                        font=Fonts.title(), color=Colors.ACCENT)
+            render_text(surface, "›", (x + w - 16, y + (h - 14) // 2),
+                        font=Fonts.body(), color=Colors.ACCENT)

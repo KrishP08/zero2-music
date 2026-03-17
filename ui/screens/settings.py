@@ -1,135 +1,205 @@
 """
-Settings Screen — shuffle, repeat, Bluetooth, WiFi, and player settings.
+Settings Screen — Tack UI landscape 2-column card layout.
 """
 
-import subprocess
+import pygame
 from ui.screen_manager import Screen
-from ui.theme import Colors, Fonts, draw_gradient_bg_cached, render_text, draw_rounded_rect
-from ui.widgets import StatusBar, ScrollList
+from ui.theme import Colors, Fonts, draw_gradient_bg_cached, render_text, draw_rounded_rect, load_icon, tint_icon
+from ui.widgets import StatusBar, BottomNavBar
 from hardware.input_handler import InputAction
-from core.playlist import RepeatMode
 import config
 
 
 class SettingsScreen(Screen):
-    """Settings menu with toggle controls."""
+    """Settings with 2-column card grid layout."""
 
     def __init__(self, app):
         super().__init__(app)
         self.status_bar = StatusBar()
-        self.scroll_list = None
+        self.bottom_nav = BottomNavBar()
+        self.bottom_nav.active_tab = 3  # Settings tab
+        self.selected_index = 0
+        self._cards = []
+        self._icons = {}
+        self._load_icons()
+
+    def _load_icons(self):
+        for name in ("wifi", "bluetooth", "settings", "album"):
+            icon = load_icon(name, size=(18, 18))
+            if icon:
+                self._icons[name] = icon
 
     def on_enter(self):
-        self._build_menu()
+        self._build_cards()
 
-    def _build_menu(self):
-        """Build settings items with current values."""
-        shuffle_state = "On" if self.app.playlist.shuffle else "Off"
-        repeat_state = self.app.playlist.repeat_label
+    def on_resume(self):
+        self._build_cards()
 
+    def _build_cards(self):
         bt = self.app.bluetooth
         wifi = self.app.wifi
 
-        items = [
-            {"label": "Shuffle", "value": shuffle_state, "action": "shuffle"},
-            {"label": "Repeat", "value": repeat_state, "action": "repeat"},
-            {"label": "─────────", "value": "", "action": "none"},
-            {"label": "Bluetooth", "value": "On" if bt.enabled else "Off", "action": "bluetooth"},
-            {"label": "WiFi", "value": "On" if wifi.enabled else "Off", "action": "wifi"},
-            {"label": "─────────", "value": "", "action": "none"},
-            {"label": "Rescan Library", "value": f"{len(self.app.library.tracks)} tracks", "action": "rescan"},
-            {"label": "About Device", "value": "", "action": "about"},
-        ]
+        wifi_net = wifi.get_current_network() if wifi.available else None
 
-        self.scroll_list = ScrollList(
-            items, header="Settings",
-            item_renderer=self._render_setting_item
-        )
+        self._cards = [
+            {
+                "label": "WiFi",
+                "subtitle": wifi_net or "Not connected",
+                "icon": "wifi",
+                "enabled": wifi.enabled,
+                "action": "wifi",
+            },
+            {
+                "label": "Bluetooth",
+                "subtitle": "Available" if bt.available else "Not found",
+                "icon": "bluetooth",
+                "enabled": bt.enabled,
+                "action": "bluetooth",
+            },
+            {
+                "label": "Shuffle",
+                "subtitle": "On" if self.app.playlist.shuffle else "Off",
+                "icon": "settings",
+                "enabled": self.app.playlist.shuffle,
+                "action": "shuffle",
+            },
+            {
+                "label": "About",
+                "subtitle": "Zero2 Music v1.0",
+                "icon": "album",
+                "enabled": None,  # No toggle
+                "action": "about",
+            },
+        ]
 
     def handle_input(self, action):
         if action == InputAction.SCROLL_UP:
-            self.scroll_list.scroll_up()
+            if self.selected_index > 1:
+                self.selected_index -= 2
         elif action == InputAction.SCROLL_DOWN:
-            self.scroll_list.scroll_down()
+            if self.selected_index + 2 < len(self._cards):
+                self.selected_index += 2
+        elif action == InputAction.NEXT_TRACK:
+            if self.selected_index % 2 == 0 and self.selected_index + 1 < len(self._cards):
+                self.selected_index += 1
+        elif action == InputAction.PREV_TRACK:
+            if self.selected_index % 2 == 1:
+                self.selected_index -= 1
         elif action == InputAction.SELECT:
-            self._toggle_setting()
+            self._handle_select()
         elif action == InputAction.BACK:
             self.app.screen_manager.pop()
 
-    def _toggle_setting(self):
-        item = self.scroll_list.selected_item
-        if not item:
+    def _handle_select(self):
+        if self.selected_index >= len(self._cards):
             return
+        card = self._cards[self.selected_index]
+        action = card.get("action")
 
-        action = item.get("action")
-        if action == "shuffle":
-            self.app.playlist.toggle_shuffle()
-            self._build_menu()
-        elif action == "repeat":
-            self.app.playlist.cycle_repeat()
-            self._build_menu()
+        if action == "wifi":
+            from ui.screens.wifi import WiFiScreen
+            self.app.screen_manager.push(WiFiScreen(self.app))
         elif action == "bluetooth":
             from ui.screens.bluetooth import BluetoothScreen
-            screen = BluetoothScreen(self.app)
-            self.app.screen_manager.push(screen)
-        elif action == "wifi":
-            from ui.screens.wifi import WiFiScreen
-            screen = WiFiScreen(self.app)
-            self.app.screen_manager.push(screen)
-        elif action == "rescan":
-            self.app.library.scan()
-            self.app.library.save_cache()
-            self._build_menu()
+            self.app.screen_manager.push(BluetoothScreen(self.app))
+        elif action == "shuffle":
+            self.app.playlist.toggle_shuffle()
+            self._build_cards()
         elif action == "about":
             from ui.screens.about import AboutScreen
-            screen = AboutScreen(self.app)
-            self.app.screen_manager.push(screen)
+            self.app.screen_manager.push(AboutScreen(self.app))
 
     def update(self, dt):
-        if self.scroll_list:
-            self.scroll_list.update(dt)
+        pass
 
     def render(self, surface, x_offset=0):
         draw_gradient_bg_cached(surface)
+
+        # Header
         self.status_bar.render(surface, x_offset)
-        if self.scroll_list:
-            self.scroll_list.render(surface, x_offset)
 
-    def _render_setting_item(self, surface, item, rect, selected, x_offset):
-        """Custom renderer showing label + current value."""
+        # Title row
+        header_y = StatusBar.HEIGHT + 2
+        icon = self._icons.get("settings")
+        if icon:
+            tinted = tint_icon(icon, Colors.ACCENT)
+            surface.blit(tinted, (x_offset + 10, header_y + 2))
+        render_text(surface, "SETTINGS",
+                    (x_offset + 32, header_y + 2),
+                    font=Fonts.tiny(), color=Colors.TEXT_PRIMARY)
+
+        # 2-column card grid
+        grid_y = header_y + 22
+        grid_x = x_offset + 8
+        card_w = (config.SCREEN_WIDTH - 24) // 2
+        card_h = 72
+        gap = 8
+
+        for i, card in enumerate(self._cards):
+            col = i % 2
+            row = i // 2
+            cx = grid_x + col * (card_w + gap)
+            cy = grid_y + row * (card_h + gap)
+            selected = (i == self.selected_index)
+
+            self._render_card(surface, card, (cx, cy, card_w, card_h), selected)
+
+        self.bottom_nav.render(surface, x_offset)
+
+    def _render_card(self, surface, card, rect, selected):
         x, y, w, h = rect
-        label = item.get("label", "")
-        value = item.get("value", "")
-        action = item.get("action", "")
+        label = card.get("label", "")
+        subtitle = card.get("subtitle", "")
+        icon_name = card.get("icon", "")
+        enabled = card.get("enabled")
 
-        # Divider row
-        if action == "none":
-            render_text(surface, label, (x + 14, y + (h - 10) // 2),
-                        font=Fonts.small(), color=Colors.DIVIDER)
-            return
+        # Card background
+        bg_color = Colors.BG_CARD if not selected else Colors.BG_CARD_HIGHLIGHT
+        draw_rounded_rect(surface, bg_color, (x, y, w, h), radius=10)
 
-        # Label
-        label_color = Colors.TEXT_PRIMARY if selected else Colors.TEXT_SECONDARY
-        render_text(surface, label, (x + 14, y + (h - 16) // 2),
-                    font=Fonts.body(), color=label_color)
+        # Selection border
+        if selected:
+            border_surf = pygame.Surface((w, h), pygame.SRCALPHA)
+            pygame.draw.rect(border_surf, (*Colors.ACCENT[:3], 60),
+                             (0, 0, w, h), width=1, border_radius=10)
+            surface.blit(border_surf, (x, y))
 
-        # Value on right side
-        if value:
-            if value == "On":
-                val_color = Colors.BATTERY_GREEN
-            elif value == "Off":
-                val_color = Colors.TEXT_MUTED
-            elif selected:
-                val_color = Colors.ACCENT
+        # Top row: icon + toggle
+        # Icon badge
+        icon_surf = self._icons.get(icon_name)
+        badge_size = 26
+        draw_rounded_rect(surface, (*Colors.ACCENT[:3], 40),
+                          (x + 8, y + 8, badge_size, badge_size), radius=6)
+        if icon_surf:
+            tinted = tint_icon(icon_surf, Colors.ACCENT)
+            surface.blit(tinted, (x + 12, y + 12))
+
+        # Toggle switch (if applicable)
+        if enabled is not None:
+            sw_w, sw_h = 32, 16
+            sw_x = x + w - sw_w - 8
+            sw_y = y + 12
+            if enabled:
+                draw_rounded_rect(surface, Colors.ACCENT,
+                                  (sw_x, sw_y, sw_w, sw_h), radius=sw_h // 2)
+                # Knob
+                pygame.draw.circle(surface, Colors.WHITE,
+                                   (sw_x + sw_w - sw_h // 2, sw_y + sw_h // 2),
+                                   sw_h // 2 - 2)
             else:
-                val_color = Colors.TEXT_MUTED
-            val_w = Fonts.small().size(value)[0]
-            render_text(surface, value,
-                        (x + w - val_w - 10, y + (h - 13) // 2),
-                        font=Fonts.small(), color=val_color)
+                draw_rounded_rect(surface, (60, 70, 90),
+                                  (sw_x, sw_y, sw_w, sw_h), radius=sw_h // 2)
+                pygame.draw.circle(surface, Colors.TEXT_MUTED,
+                                   (sw_x + sw_h // 2, sw_y + sw_h // 2),
+                                   sw_h // 2 - 2)
+        else:
+            # Chevron for navigation cards
+            render_text(surface, "›", (x + w - 14, y + 14),
+                        font=Fonts.body(), color=Colors.TEXT_MUTED)
 
-        # Navigation arrow for sub-screens
-        if action in ("bluetooth", "wifi", "about"):
-            if selected:
-                render_text(surface, "›", (x + w - 16, y + (h - 16) // 2),
-                            font=Fonts.body(), color=Colors.ACCENT)
+        # Labels at bottom
+        render_text(surface, label, (x + 8, y + h - 30),
+                    font=Fonts.body(), color=Colors.TEXT_PRIMARY)
+        render_text(surface, subtitle, (x + 8, y + h - 14),
+                    font=Fonts.tiny(), color=Colors.TEXT_MUTED,
+                    max_width=w - 16)

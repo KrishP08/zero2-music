@@ -1,6 +1,7 @@
 """
-Theme — Innioasis Y1–inspired glassmorphic dark theme.
+Theme — Tack UI inspired dark theme with blue accent.
 Defines colors, fonts, and rendering helpers for the player UI.
+Landscape 320×240 optimized.
 """
 
 import pygame
@@ -9,21 +10,21 @@ import config
 
 
 # ════════════════════════════════════════════════════════════════════
-#  COLOR PALETTE  — deep dark with cyan / teal accents
+#  COLOR PALETTE  — deep dark with blue accent (#257BF4)
 # ════════════════════════════════════════════════════════════════════
 class Colors:
     # Backgrounds
-    BG_DARK = (8, 10, 18)
-    BG_GRADIENT_TOP = (12, 16, 32)
-    BG_GRADIENT_BOTTOM = (4, 6, 12)
-    BG_CARD = (18, 22, 40)
-    BG_CARD_HIGHLIGHT = (28, 34, 58)
+    BG_DARK = (10, 15, 22)           # #0A0F16
+    BG_GRADIENT_TOP = (12, 17, 26)
+    BG_GRADIENT_BOTTOM = (8, 12, 18)
+    BG_CARD = (22, 30, 41)           # #161E29
+    BG_CARD_HIGHLIGHT = (30, 40, 56)
 
-    # Accent
-    ACCENT = (0, 212, 255)        # Cyan / teal
-    ACCENT_DIM = (0, 140, 180)
-    ACCENT_GLOW = (0, 212, 255, 60)
-    ACCENT_DARK = (0, 80, 110)
+    # Accent — Blue
+    ACCENT = (37, 123, 244)          # #257BF4
+    ACCENT_DIM = (25, 90, 180)
+    ACCENT_GLOW = (37, 123, 244, 60)
+    ACCENT_DARK = (18, 60, 120)
 
     # Text
     TEXT_PRIMARY = (240, 242, 250)
@@ -31,10 +32,10 @@ class Colors:
     TEXT_MUTED = (80, 90, 110)
 
     # UI Elements
-    HIGHLIGHT_BG = (0, 212, 255, 30)
+    HIGHLIGHT_BG = (37, 123, 244, 30)
     DIVIDER = (30, 36, 55)
     PROGRESS_BG = (30, 36, 55)
-    PROGRESS_FILL = (0, 212, 255)
+    PROGRESS_FILL = (37, 123, 244)
 
     # Glass
     GLASS_BG = (20, 24, 44, 180)
@@ -46,9 +47,13 @@ class Colors:
     BLACK = (0, 0, 0)
     TRANSPARENT = (0, 0, 0, 0)
 
+    # Badge colors
+    BADGE_FLAC = (37, 123, 244)
+    BADGE_MP3 = (80, 90, 110)
+
 
 # ════════════════════════════════════════════════════════════════════
-#  FONT MANAGER
+#  FONT MANAGER — Space Grotesk
 # ════════════════════════════════════════════════════════════════════
 class Fonts:
     """Lazy-loading font manager."""
@@ -61,46 +66,65 @@ class Fonts:
         if key not in cls._cache:
             font_path = cls._find_font(bold)
             if font_path:
-                cls._cache[key] = pygame.font.Font(font_path, size)
+                try:
+                    cls._cache[key] = pygame.font.Font(font_path, size)
+                except Exception:
+                    cls._cache[key] = pygame.font.Font(None, size)
             else:
-                cls._cache[key] = pygame.font.SysFont(
-                    "Inter, Helvetica, Arial, sans-serif", size, bold=bold
-                )
+                # Use pygame default font (guaranteed to work)
+                try:
+                    f = pygame.font.SysFont("dejavusans,liberationsans,freesans,arial", size, bold=bold)
+                    if f is None:
+                        f = pygame.font.Font(None, size)
+                    cls._cache[key] = f
+                except Exception:
+                    cls._cache[key] = pygame.font.Font(None, size)
         return cls._cache[key]
 
     @classmethod
     def _find_font(cls, bold=False):
-        """Try to find Inter font files in assets."""
+        """Try to find Space Grotesk or other font files in assets."""
         suffix = "Bold" if bold else "Regular"
         candidates = [
+            os.path.join(config.FONT_DIR, f"SpaceGrotesk-{suffix}.ttf"),
             os.path.join(config.FONT_DIR, f"Inter-{suffix}.ttf"),
             os.path.join(config.FONT_DIR, f"Inter-{suffix}.otf"),
-            os.path.join(config.FONT_DIR, f"inter-{suffix.lower()}.ttf"),
         ]
         for path in candidates:
             if os.path.exists(path):
-                return path
+                # Verify it's actually a font file (not corrupted)
+                try:
+                    with open(path, 'rb') as f:
+                        header = f.read(4)
+                    if header[:4] in (b'\x00\x01\x00\x00', b'OTTO', b'true', b'typ1'):
+                        return path
+                except Exception:
+                    pass
         return None
 
     @classmethod
     def title(cls):
-        return cls.get(18, bold=True)
+        return cls.get(16, bold=True)
 
     @classmethod
     def body(cls):
-        return cls.get(14)
+        return cls.get(13)
 
     @classmethod
     def small(cls):
-        return cls.get(11)
+        return cls.get(10)
+
+    @classmethod
+    def tiny(cls):
+        return cls.get(9, bold=True)
 
     @classmethod
     def large(cls):
-        return cls.get(24, bold=True)
+        return cls.get(20, bold=True)
 
     @classmethod
     def huge(cls):
-        return cls.get(32, bold=True)
+        return cls.get(28, bold=True)
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -148,10 +172,7 @@ def draw_rounded_rect(surface, color, rect, radius=8, alpha=255):
 
 def draw_glass_panel(surface, rect, radius=12):
     """Draw a frosted glass panel with border."""
-    # Semi-transparent background
     draw_rounded_rect(surface, Colors.GLASS_BG, rect, radius)
-    # Subtle border
-    border_rect = (rect[0], rect[1], rect[2], rect[3])
     temp = pygame.Surface((rect[2], rect[3]), pygame.SRCALPHA)
     pygame.draw.rect(temp, Colors.GLASS_BORDER,
                      (0, 0, rect[2], rect[3]),
@@ -159,19 +180,25 @@ def draw_glass_panel(surface, rect, radius=12):
     surface.blit(temp, (rect[0], rect[1]))
 
 
-def draw_glow_circle(surface, center, radius, color=Colors.ACCENT, intensity=40):
+def draw_glow_circle(surface, center, radius, color=None, intensity=40):
     """Draw a soft glow circle effect."""
+    if color is None:
+        color = Colors.ACCENT
     for i in range(5, 0, -1):
-        alpha = intensity // i
+        a = intensity // i
         r = radius + i * 3
         temp = pygame.Surface((r * 2, r * 2), pygame.SRCALPHA)
-        pygame.draw.circle(temp, (*color[:3], alpha), (r, r), r)
+        pygame.draw.circle(temp, (*color[:3], a), (r, r), r)
         surface.blit(temp, (center[0] - r, center[1] - r))
 
 
-def draw_progress_bar(surface, rect, progress, fill_color=Colors.PROGRESS_FILL,
-                       bg_color=Colors.PROGRESS_BG, glow=True):
+def draw_progress_bar(surface, rect, progress, fill_color=None,
+                       bg_color=None, glow=True):
     """Draw a progress bar with optional glow effect."""
+    if fill_color is None:
+        fill_color = Colors.PROGRESS_FILL
+    if bg_color is None:
+        bg_color = Colors.PROGRESS_BG
     x, y, w, h = rect
 
     # Background
@@ -190,14 +217,15 @@ def draw_progress_bar(surface, rect, progress, fill_color=Colors.PROGRESS_FILL,
             surface.blit(glow_surf, (x + fill_w - 8, y - 3))
 
 
-def render_text(surface, text, pos, font=None, color=Colors.TEXT_PRIMARY,
+def render_text(surface, text, pos, font=None, color=None,
                 max_width=None, center=False):
     """Render text with optional truncation and centering."""
     if font is None:
         font = Fonts.body()
+    if color is None:
+        color = Colors.TEXT_PRIMARY
 
     if max_width:
-        # Truncate text to fit
         while font.size(text)[0] > max_width and len(text) > 3:
             text = text[:-4] + "..."
 
@@ -211,6 +239,10 @@ def render_text(surface, text, pos, font=None, color=Colors.TEXT_PRIMARY,
 
     return rendered.get_size()
 
+
+# ════════════════════════════════════════════════════════════════════
+#  ICON LOADING
+# ════════════════════════════════════════════════════════════════════
 
 _icon_cache = {}
 
@@ -229,8 +261,15 @@ def load_icon(name, size=(24, 24)):
     return None
 
 
+_tint_cache = {}
+
+
 def tint_icon(icon_surface, color):
     """Return a copy of icon_surface tinted to the given color, preserving alpha."""
+    # Cache by surface id + color
+    key = (id(icon_surface), color[:3])
+    if key in _tint_cache:
+        return _tint_cache[key]
     tinted = icon_surface.copy()
     w, h = tinted.get_size()
     for px in range(w):
@@ -238,4 +277,5 @@ def tint_icon(icon_surface, color):
             r, g, b, a = tinted.get_at((px, py))
             if a > 0:
                 tinted.set_at((px, py), (*color[:3], a))
+    _tint_cache[key] = tinted
     return tinted
