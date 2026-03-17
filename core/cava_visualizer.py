@@ -78,7 +78,7 @@ bar_delimiter = 59
                     if len(parts) >= self.bars:
                         try:
                             # Parse integers 0-100 and normalize to 0.0-1.0
-                            self.values = [int(v) / 100.0 for v in parts[:self.bars]]
+                            self.values = [max(0.0, min(1.0, int(v) / 100.0)) for v in parts[:self.bars]]
                         except ValueError:
                             pass
         except Exception as e:

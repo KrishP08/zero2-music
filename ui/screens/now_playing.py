@@ -169,9 +169,22 @@ class NowPlayingScreen(Screen):
 
         self.status_bar.render(surface, x_offset, title=fmt_text)
 
-        # Cava visualizer data
-        levels = self.app.cava.get_levels()
+        # Cava visualizer data with smoothing interpolation
+        target_levels = self.app.cava.get_levels()
         bar_count = self.app.cava.bars
+        
+        if not hasattr(self, '_smoothed_levels') or len(self._smoothed_levels) != bar_count:
+            self._smoothed_levels = [0.0] * bar_count
+            
+        for i in range(bar_count):
+            t_val = target_levels[i] if i < len(target_levels) else 0.0
+            # Easing: fast attack, slower decay
+            if t_val > self._smoothed_levels[i]:
+                self._smoothed_levels[i] += (t_val - self._smoothed_levels[i]) * 0.6
+            else:
+                self._smoothed_levels[i] += (t_val - self._smoothed_levels[i]) * 0.2
+                
+        levels = self._smoothed_levels
         
         # ── Left Column: Album Art ──────────────────────────────
         theme_round = getattr(config, "NOW_PLAYING_THEME", "square") == "round"
@@ -188,14 +201,19 @@ class NowPlayingScreen(Screen):
             import math
             for i in range(bar_count):
                 angle = i * (math.pi * 2 / bar_count) - math.pi / 2
-                val = levels[i] if i < len(levels) else 0.0
+                val = levels[i]
                 mag = int(val * 24)  # amplify for circle
                 
                 x1 = center_x + math.cos(angle) * base_radius
                 y1 = center_y + math.sin(angle) * base_radius
                 x2 = center_x + math.cos(angle) * (base_radius + 4 + mag)
                 y2 = center_y + math.sin(angle) * (base_radius + 4 + mag)
-                pygame.draw.line(surface, Colors.ACCENT, (x1, y1), (x2, y2), 3)
+                
+                r = min(255, Colors.ACCENT_DIM[0] + int(val * 100))
+                g = min(255, Colors.ACCENT_DIM[1] + int(val * 100))
+                b = min(255, Colors.ACCENT_DIM[2] + int(val * 100))
+                
+                pygame.draw.line(surface, (r, g, b), (x1, y1), (x2, y2), 3)
 
             # Draw album art masked as a circle
             if self._album_art_surface:
@@ -297,7 +315,7 @@ class NowPlayingScreen(Screen):
         self.controls.selected = orig_selected
 
         if not theme_round:
-            # ── Bottom Linear Visualizer with Gradient ────────────────────────────
+            # ── Bottom Linear Visualizer ────────────────────────────
             viz_y = config.SCREEN_HEIGHT - 6
             viz_w = config.SCREEN_WIDTH
             bar_w = viz_w // bar_count
@@ -306,21 +324,18 @@ class NowPlayingScreen(Screen):
             BAR_COLOR_BOT = (200, 160, 255)
             
             for i in range(bar_count):
-                val = levels[i] if i < len(levels) else 0.0
-                bar_h = int(val * 40) # max height 40px at bottom
-                if bar_h <= 0:
-                    continue
-                    
-                bx = x_offset + i * bar_w
+                val = levels[i]
+                bar_h = max(2, int(val * 40)) # max height 40px at bottom
                 
-                # Draw vertical gradient
-                for j in range(bar_h):
-                    t = j / max(bar_h, 1)
-                    r = int(BAR_COLOR_TOP[0] * (1 - t) + BAR_COLOR_BOT[0] * t)
-                    g = int(BAR_COLOR_TOP[1] * (1 - t) + BAR_COLOR_BOT[1] * t)
-                    b = int(BAR_COLOR_TOP[2] * (1 - t) + BAR_COLOR_BOT[2] * t)
-                    pygame.draw.rect(surface, (r, g, b),
-                                     (bx, viz_y - j, bar_w - 2, 1))
+                bx = x_offset + i * bar_w + 1
+                bw = bar_w - 2
+                
+                # Dynamic solid color based on height instead of slow per-pixel gradient
+                r = int(BAR_COLOR_BOT[0] + (BAR_COLOR_TOP[0] - BAR_COLOR_BOT[0]) * val)
+                g = int(BAR_COLOR_BOT[1] + (BAR_COLOR_TOP[1] - BAR_COLOR_BOT[1]) * val)
+                b = int(BAR_COLOR_BOT[2] + (BAR_COLOR_TOP[2] - BAR_COLOR_BOT[2]) * val)
+                
+                pygame.draw.rect(surface, (r, g, b), (bx, viz_y - bar_h, bw, bar_h), border_radius=2)
 
         # ── Volume Overlay ──────────────────────────────────────
         self.volume_overlay.render(surface)

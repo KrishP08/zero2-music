@@ -6,7 +6,10 @@
     "album": "Unknown Album",
     "duration": 200.04,
     "track_num": 0,
-    "genre": "Unknown"
+    "genre": "Unknown",
+    "play_count": 0,
+    "is_favorite": false,
+    "playlists": []
   },
   {
     "filepath": "/home/krish/Music/Ryon6s Chub1na.mp3",
@@ -15,7 +18,10 @@
     "album": "Unknown Album",
     "duration": 30.040816326530614,
     "track_num": 0,
-    "genre": "Unknown"
+    "genre": "Unknown",
+    "play_count": 0,
+    "is_favorite": false,
+    "playlists": []
   },
   {
     "filepath": "/home/krish/Music/Ryon6s Ringtone Download - MobCup.Com.Co.mp3",
@@ -24,7 +30,10 @@
     "album": "MobCup.Com.Co",
     "duration": 34.992,
     "track_num": 1,
-    "genre": "MobCup.Com.Co"
+    "genre": "MobCup.Com.Co",
+    "play_count": 0,
+    "is_favorite": false,
+    "playlists": []
   },
   {
     "filepath": "/home/krish/Music/SpotiDown.App - Montagem Bandido - Slowed - Jmilton_ Itamar Mc.mp3",
@@ -33,7 +42,10 @@
     "album": "Montagem Bandido",
     "duration": 97.64571428571429,
     "track_num": 68,
-    "genre": "Unknown"
+    "genre": "Unknown",
+    "play_count": 0,
+    "is_favorite": false,
+    "playlists": []
   },
   {
     "filepath": "/home/krish/Music/SpotiDown.App - NO ERA AMOR - Slowed - DJ Asul.mp3",
@@ -42,7 +54,10 @@
     "album": "NO ERA AMOR",
     "duration": 93.1004081632653,
     "track_num": 68,
-    "genre": "Unknown"
+    "genre": "Unknown",
+    "play_count": 0,
+    "is_favorite": false,
+    "playlists": []
   },
   {
     "filepath": "/home/krish/Music/SpotiDownloader.com - MONTAGEM ALUCINANTE - DJ ORBITAL.mp3",
@@ -51,7 +66,10 @@
     "album": "MONTAGEM ALUCINANTE",
     "duration": 170.68408163265306,
     "track_num": 0,
-    "genre": "Unknown"
+    "genre": "Unknown",
+    "play_count": 0,
+    "is_favorite": false,
+    "playlists": []
   },
   {
     "filepath": "/home/krish/Music/SpotiDownloader.com - MONTAGEM XONADA - MXZI.mp3",
@@ -60,7 +78,10 @@
     "album": "MONTAGEM XONADA",
     "duration": 75.72897959183673,
     "track_num": 0,
-    "genre": "Unknown"
+    "genre": "Unknown",
+    "play_count": 0,
+    "is_favorite": false,
+    "playlists": []
   },
   {
     "filepath": "/home/krish/Music/SpotiDownloader.com - VEM NO PIQUE - Ultra Slowed - MGD.mp3",
@@ -69,7 +90,10 @@
     "album": "VEM NO PIQUE - Ultra Slowed",
     "duration": 120.08489795918368,
     "track_num": 0,
-    "genre": "Unknown"
+    "genre": "Unknown",
+    "play_count": 0,
+    "is_favorite": false,
+    "playlists": []
   },
   {
     "filepath": "/home/krish/Music/[SPOTDOWNLOADER.COM] Bound by a Dream.mp3",
@@ -78,7 +102,10 @@
     "album": "Bound by a Dream",
     "duration": 239.0465306122449,
     "track_num": 0,
-    "genre": "Unknown"
+    "genre": "Unknown",
+    "play_count": 0,
+    "is_favorite": false,
+    "playlists": []
   },
   {
     "filepath": "/home/krish/Music/[SPOTDOWNLOADER.COM] FUNK SIGILO - SUPER SLOWED.mp3",
@@ -87,7 +114,10 @@
     "album": "FUNK SIGILO",
     "duration": 121.93959183673469,
     "track_num": 0,
-    "genre": "Unknown"
+    "genre": "Unknown",
+    "play_count": 0,
+    "is_favorite": false,
+    "playlists": []
   },
   {
     "filepath": "/home/krish/Music/[SPOTDOWNLOADER.COM] TE CONOC\u00cd - Super Slowed.mp3",
@@ -96,7 +126,10 @@
     "album": "TE CONOC\u00cd",
     "duration": 151.48408163265307,
     "track_num": 0,
-    "genre": "Unknown"
+    "genre": "Unknown",
+    "play_count": 0,
+    "is_favorite": false,
+    "playlists": []
   },
   {
     "filepath": "/home/krish/Music/bling_bang_bang_born (1).mp3",
@@ -105,7 +138,10 @@
     "album": "Unknown Album",
     "duration": 19.748571428571427,
     "track_num": 0,
-    "genre": "Unknown"
+    "genre": "Unknown",
+    "play_count": 3,
+    "is_favorite": false,
+    "playlists": []
   },
   {
     "filepath": "/home/krish/Music/gao_yifei_our_time.mp3",
@@ -114,6 +150,9 @@
     "album": "Unknown Album",
     "duration": 30.040816326530614,
     "track_num": 0,
-    "genre": "Unknown"
+    "genre": "Unknown",
+    "play_count": 0,
+    "is_favorite": false,
+    "playlists": []
   }
 ]

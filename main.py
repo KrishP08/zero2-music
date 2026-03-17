@@ -95,6 +95,11 @@ class App:
 
     def _on_track_end(self):
         """Called when a track finishes playing — auto-advance."""
+        current = self.playlist.current_track
+        if current:
+            current.play_count += 1
+            self.library.save_cache()
+            
         track = self.playlist.next_track()
         if track:
             self.audio.play(track.filepath)

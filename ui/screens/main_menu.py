@@ -17,7 +17,7 @@ class MainMenuScreen(Screen):
         {"label": "All Songs",   "icon_name": "music",       "action": "music"},
         {"label": "Artists",     "icon_name": "artist",      "action": "artists"},
         {"label": "Albums",      "icon_name": "album",       "action": "albums"},
-        {"label": "Now Playing", "icon_name": "now_playing",  "action": "now_playing"},
+        {"label": "Now Playing", "icon_name": "now_playing", "action": "now_playing"},
         {"label": "Bluetooth",   "icon_name": "bluetooth",   "action": "bluetooth"},
         {"label": "WiFi",        "icon_name": "wifi",        "action": "wifi"},
         {"label": "Settings",    "icon_name": "settings",    "action": "settings"},

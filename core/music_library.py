@@ -20,7 +20,8 @@ class Track:
     """Represents a single music track with its metadata."""
 
     def __init__(self, filepath, title=None, artist=None, album=None,
-                 duration=0.0, track_num=0, genre=None, album_art_data=None):
+                 duration=0.0, track_num=0, genre=None, album_art_data=None,
+                 play_count=0, is_favorite=False, playlists=None):
         self.filepath = filepath
         self.title = title or os.path.splitext(os.path.basename(filepath))[0]
         self.artist = artist or "Unknown Artist"
@@ -29,6 +30,9 @@ class Track:
         self.track_num = track_num
         self.genre = genre or "Unknown"
         self._album_art_data = album_art_data  # raw bytes, lazy-loaded
+        self.play_count = play_count
+        self.is_favorite = is_favorite
+        self.playlists = playlists or []
 
     @property
     def display_title(self):
@@ -88,6 +92,9 @@ class Track:
             "duration": self.duration,
             "track_num": self.track_num,
             "genre": self.genre,
+            "play_count": self.play_count,
+            "is_favorite": self.is_favorite,
+            "playlists": self.playlists,
         }
 
     @classmethod
@@ -100,6 +107,9 @@ class Track:
             duration=d.get("duration", 0.0),
             track_num=d.get("track_num", 0),
             genre=d.get("genre"),
+            play_count=d.get("play_count", 0),
+            is_favorite=d.get("is_favorite", False),
+            playlists=d.get("playlists", []),
         )
 
 
@@ -112,6 +122,7 @@ class MusicLibrary:
         self._artists = {}         # artist -> [Track]
         self._albums = {}          # album -> [Track]
         self._genres = {}          # genre -> [Track]
+        self.sort_mode = "name"    # persistent library sort
 
     def scan(self):
         """Scan music directory and extract metadata for all tracks."""
@@ -220,6 +231,20 @@ class MusicLibrary:
             self.tracks,
             key=lambda t: (t.artist.lower(), t.album.lower(), t.track_num)
         )
+
+    @property
+    def favorites(self):
+        return [t for t in self.tracks if t.is_favorite]
+
+    def get_playlist_names(self):
+        playlists = set()
+        for t in self.tracks:
+            for p in t.playlists:
+                playlists.add(p)
+        return sorted(list(playlists))
+
+    def get_playlist_tracks(self, playlist_name):
+        return [t for t in self.tracks if playlist_name in t.playlists]
 
     # ── Cache ───────────────────────────────────────────────────────
     def save_cache(self):

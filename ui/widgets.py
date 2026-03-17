@@ -170,11 +170,23 @@ class ScrollList:
         diff = self._target_scroll - self._scroll_offset
         self._scroll_offset += diff * min(1.0, dt * 12.0)
 
-    def render(self, surface, x_offset=0):
-        top = self._top_offset
+    def render(self, surface, x_offset=0, override_bounds=None):
+        if override_bounds:
+            bx, by, bw, bh = override_bounds
+            top = by
+            clip_bottom = by + bh
+            clip_rect = pygame.Rect(bx, by, bw, bh)
+            list_x = bx
+            list_w = bw
+        else:
+            top = self._top_offset
+            clip_bottom = config.SCREEN_HEIGHT - self._bottom_margin
+            clip_rect = pygame.Rect(x_offset, top, config.SCREEN_WIDTH, clip_bottom - top)
+            list_x = x_offset
+            list_w = config.SCREEN_WIDTH
 
         # Header
-        if self.header:
+        if self.header and not override_bounds:
             render_text(
                 surface, self.header,
                 (x_offset + self.PADDING_X, StatusBar.HEIGHT + 4),
@@ -183,8 +195,6 @@ class ScrollList:
             )
 
         # Clip area
-        clip_bottom = config.SCREEN_HEIGHT - self._bottom_margin
-        clip_rect = pygame.Rect(x_offset, top, config.SCREEN_WIDTH, clip_bottom - top)
         surface.set_clip(clip_rect)
 
         for i, item in enumerate(self.items):
@@ -194,8 +204,8 @@ class ScrollList:
                 continue
 
             item_rect = (
-                x_offset + 6, y + 2,
-                config.SCREEN_WIDTH - 12, self.ITEM_HEIGHT - 4
+                list_x + 6, y + 2,
+                list_w - 12, self.ITEM_HEIGHT - 4
             )
             selected = (i == self.selected_index)
 
@@ -205,7 +215,7 @@ class ScrollList:
                 # Left accent bar
                 pygame.draw.rect(
                     surface, Colors.ACCENT,
-                    (x_offset + 6, y + 8, 3, self.ITEM_HEIGHT - 16),
+                    (list_x + 6, y + 8, 3, self.ITEM_HEIGHT - 16),
                     border_radius=2
                 )
 
@@ -215,7 +225,21 @@ class ScrollList:
                 self._default_render(surface, item, item_rect, selected, x_offset)
 
         surface.set_clip(None)
-        self._render_scrollbar(surface, top, x_offset, clip_bottom)
+        
+        if len(self.items) > 0:
+            total_h = len(self.items) * self.ITEM_HEIGHT
+            visible_h = clip_bottom - top
+            if total_h > visible_h:
+                bar_h = max(16, int(visible_h * visible_h / total_h))
+                bar_y = top + int(self._scroll_offset / total_h * visible_h)
+                bar_y = min(bar_y, clip_bottom - bar_h)
+                
+                bar_x = list_x + list_w - 4 if override_bounds else x_offset + config.SCREEN_WIDTH - 4
+                draw_rounded_rect(
+                    surface, (*Colors.ACCENT[:3], 50),
+                    (bar_x, bar_y, 3, bar_h),
+                    radius=2
+                )
 
     def _default_render(self, surface, item, rect, selected, x_offset):
         x, y, w, h = rect
