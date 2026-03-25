@@ -186,6 +186,10 @@ class NowPlayingScreen(Screen):
                 
         levels = self._smoothed_levels
         
+        if getattr(config, "THEME", "modern") == "retro":
+            self._render_retro(surface, x_offset, levels)
+            return
+        
         # ── Left Column: Album Art ──────────────────────────────
         theme_round = getattr(config, "NOW_PLAYING_THEME", "square") == "round"
         
@@ -340,7 +344,174 @@ class NowPlayingScreen(Screen):
         # ── Volume Overlay ──────────────────────────────────────
         self.volume_overlay.render(surface)
 
+    def _render_retro(self, surface, x_offset, levels):
+        surface.fill(Colors.RETRO_BG_DARK)
+        
+        # Draw top status bar
+        track = self.app.playlist.current_track
+        fmt_text = ""
+        if track:
+            ext = track.filepath.rsplit(".", 1)[-1].upper() if "." in track.filepath else ""
+            fmt_text = f"{ext} CASETTE DECK"
+        else:
+            fmt_text = "NO TAPE DECK"
+            
+        self.status_bar.render(surface, x_offset, title=fmt_text)
+        
+        # Tape Cassette Body
+        cw, ch = 240, 150
+        cx = x_offset + (config.SCREEN_WIDTH - cw) // 2
+        cy = 28
+        
+        # Cassette Outer Shell
+        draw_rounded_rect(surface, (*Colors.RETRO_PRIMARY[:3], 30), (cx, cy, cw, ch), radius=12)
+        pygame.draw.rect(surface, Colors.RETRO_PRIMARY, (cx, cy, cw, ch), width=2, border_radius=12)
+        
+        # Top corner screws
+        pygame.draw.circle(surface, Colors.RETRO_PRIMARY, (cx + 12, cy + 12), 3, 1)
+        pygame.draw.circle(surface, Colors.RETRO_PRIMARY, (cx + cw - 12, cy + 12), 3, 1)
+        pygame.draw.circle(surface, Colors.RETRO_PRIMARY, (cx + 12, cy + ch - 12), 3, 1)
+        pygame.draw.circle(surface, Colors.RETRO_PRIMARY, (cx + cw - 12, cy + ch - 12), 3, 1)
+        
+        # Cassette Sticker
+        sw, sh = 190, 85
+        sx = cx + (cw - sw) // 2
+        sy = cy + 16
+        pygame.draw.rect(surface, Colors.RETRO_BG_LIGHT, (sx, sy, sw, sh), border_radius=6)
+        
+        if self._album_art_surface:
+            art_scaled = pygame.transform.smoothscale(self._album_art_surface, (sw, sh))
+            art_scaled.set_alpha(150)
+            surface.blit(art_scaled, (sx, sy))
+        
+        track = self.app.playlist.current_track
+        track_name = track.display_title if track else "NO TAPE IN DECK"
+        
+        # Sticker Text
+        render_text(surface, "A", (sx + 10, sy + 6), font=Fonts.body(bold=True), color=Colors.RETRO_BG_DARK)
+        render_text(surface, "MIX TAPE", (sx + sw // 2 - 30, sy + 6), font=Fonts.tiny(bold=True), color=(150, 0, 0))
+        render_text(surface, track_name[:24].upper(), (sx + 24, sy + 24), font=Fonts.tiny(bold=True), color=Colors.RETRO_BG_DARK)
+        
+        # Transparent Window (Dark rectangle in the middle of sticker)
+        ww, wh = 130, 36
+        wx = sx + (sw - ww) // 2
+        wy = sy + 40
+        pygame.draw.rect(surface, Colors.RETRO_BG_DARK, (wx, wy, ww, wh), border_radius=4)
+        pygame.draw.rect(surface, Colors.RETRO_PRIMARY, (wx, wy, ww, wh), width=1, border_radius=4)
+
+        # Reels inside window
+        progress = self.app.audio.progress
+        import math, time
+        time_sec = self.app.audio.position
+        
+        left_r = 15 - 8 * progress
+        right_r = 7 + 8 * progress
+        
+        reel_ly = wy + wh // 2
+        reel_lx = wx + 28
+        reel_ry = wy + wh // 2
+        reel_rx = wx + ww - 28
+        
+        # Draw tape path between reels
+        pygame.draw.line(surface, Colors.RETRO_BG_LIGHT, (reel_lx, reel_ly - left_r), (reel_rx, reel_ry - right_r), 1)
+        
+        # Left Reel
+        pygame.draw.circle(surface, Colors.RETRO_BG_LIGHT, (reel_lx, reel_ly), int(left_r))
+        pygame.draw.circle(surface, Colors.RETRO_BG_DARK, (reel_lx, reel_ly), 6)
+        
+        # Right Reel
+        pygame.draw.circle(surface, Colors.RETRO_BG_LIGHT, (reel_rx, reel_ry), int(right_r))
+        pygame.draw.circle(surface, Colors.RETRO_BG_DARK, (reel_rx, reel_ry), 6)
+        
+        # Reel rotation
+        if self.app.audio.is_playing:
+            angle_l = time_sec * 4
+            angle_r = time_sec * 4
+        else:
+            angle_l = 0
+            angle_r = 0
+            
+        for i in range(3):
+            a = angle_l + i * (math.pi * 2 / 3)
+            x2 = reel_lx + math.cos(a) * 6
+            y2 = reel_ly + math.sin(a) * 6
+            pygame.draw.line(surface, Colors.RETRO_BG_LIGHT, (reel_lx, reel_ly), (x2, y2), 2)
+            
+            a2 = angle_r + i * (math.pi * 2 / 3)
+            x3 = reel_rx + math.cos(a2) * 6
+            y3 = reel_ry + math.sin(a2) * 6
+            pygame.draw.line(surface, Colors.RETRO_BG_LIGHT, (reel_rx, reel_ry), (x3, y3), 2)
+            
+        # Bottom Trapezoid of tape
+        bx = cx + 30
+        bw = cw - 60
+        by = cy + ch - 35
+        bh = 35
+        pygame.draw.polygon(surface, (*Colors.RETRO_PRIMARY[:3], 30), [
+            (bx + 15, by), (bx + bw - 15, by),
+            (bx + bw, by + bh), (bx, by + bh)
+        ])
+        pygame.draw.polygon(surface, Colors.RETRO_PRIMARY, [
+            (bx + 15, by), (bx + bw - 15, by),
+            (bx + bw, by + bh), (bx, by + bh)
+        ], 1)
+        
+        # Tape holes in trapezoid
+        pygame.draw.circle(surface, Colors.RETRO_BG_DARK, (bx + 25, by + 16), 5)
+        pygame.draw.circle(surface, Colors.RETRO_BG_DARK, (bx + bw - 25, by + 16), 5)
+
+        # ── LED Level Meters ──
+        avg_level = sum(levels) / len(levels) if levels else 0
+        
+        num_segments = 14
+        segment_w = 10
+        segment_h = 6
+        gap = 3
+        meter_w = num_segments * (segment_w + gap)
+        mx = x_offset + (config.SCREEN_WIDTH - meter_w) // 2 + 8
+        my = cy + ch + 12
+        
+        render_text(surface, "L", (mx - 18, my - 3), font=Fonts.tiny(bold=True), color=Colors.RETRO_PRIMARY)
+        render_text(surface, "R", (mx - 18, my + segment_h + gap - 3), font=Fonts.tiny(bold=True), color=Colors.RETRO_PRIMARY)
+        
+        import random
+        lit_segments_l = min(num_segments, int(avg_level * num_segments * 1.8))
+        lit_segments_r = min(num_segments, int(avg_level * num_segments * 1.8 + (random.random() * 2 - 1) if lit_segments_l > 0 else 0))
+        
+        for chn, lit_count in enumerate([lit_segments_l, lit_segments_r]):
+            y = my + chn * (segment_h + gap)
+            for i in range(num_segments):
+                x = mx + i * (segment_w + gap)
+                isOn = i < lit_count
+                color = Colors.RETRO_PRIMARY if i < 10 else Colors.RETRO_ORANGE_DARK
+                
+                if isOn:
+                    pygame.draw.rect(surface, color, (x, y, segment_w, segment_h))
+                else:
+                    pygame.draw.rect(surface, (*color[:3], 30), (x, y, segment_w, segment_h))
+                    
+        # ── Status and Controls at bottom ──
+        elapsed = self._format_time(time_sec)
+        total = track.duration_str if track else "0:00"
+        render_text(surface, f"{elapsed} / {total}", (x_offset + 12, config.SCREEN_HEIGHT - 24), font=Fonts.tiny(bold=True), color=Colors.RETRO_PRIMARY)
+        
+        if self.controls_focused:
+            opts = ["SHUFFLE", "PREV", "PLAY/PAUSE", "NEXT", "REPEAT"]
+            idx = self.controls.selected
+            # Pulsing highlight color — clamp to valid 0-255 range
+            pulse = int((math.sin(time.time() * 8) + 1) * 60)
+            sel_color = (255, min(255, 150 + pulse), min(255, pulse))
+            render_text(surface, f"[{opts[idx]}]", (x_offset + config.SCREEN_WIDTH - 90, config.SCREEN_HEIGHT - 24), font=Fonts.tiny(bold=True), color=sel_color)
+        else:
+            active_str = ""
+            if getattr(self.app.playlist, "shuffle", False): active_str += "SHUF "
+            if getattr(self.app.playlist, "repeat", 0) != 0: active_str += "RPT"
+            render_text(surface, active_str, (x_offset + config.SCREEN_WIDTH - 60, config.SCREEN_HEIGHT - 24), font=Fonts.tiny(bold=True), color=(120, 80, 30))
+
+        self.volume_overlay.render(surface)
+
     def _format_time(self, seconds):
         m = int(seconds) // 60
         s = int(seconds) % 60
         return f"{m}:{s:02d}"
+

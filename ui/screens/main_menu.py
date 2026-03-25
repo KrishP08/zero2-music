@@ -36,6 +36,8 @@ class MainMenuScreen(Screen):
             item_renderer=self._render_menu_item,
             bottom_margin=BottomNavBar.HEIGHT,
         )
+        self.retro_selected_index = 0
+        self.RETRO_ITEMS = ["music", "artists", "albums", "settings"]
 
     def _load_icons(self):
         for item in self.MENU_ITEMS:
@@ -46,14 +48,41 @@ class MainMenuScreen(Screen):
                     self._icons[name] = icon
 
     def handle_input(self, action):
-        if action == InputAction.SCROLL_UP:
-            self.menu_list.scroll_up()
-        elif action == InputAction.SCROLL_DOWN:
-            self.menu_list.scroll_down()
-        elif action == InputAction.SELECT:
-            self._select_item()
-        elif action == InputAction.PLAY_PAUSE:
-            self.app.audio.toggle_pause()
+        is_retro = getattr(config, "THEME", "modern") == "retro"
+        
+        if is_retro:
+            if action == InputAction.SCROLL_UP:
+                self.retro_selected_index = max(0, self.retro_selected_index - 1)
+            elif action == InputAction.SCROLL_DOWN:
+                self.retro_selected_index = min(len(self.RETRO_ITEMS) - 1, self.retro_selected_index + 1)
+            elif action == InputAction.SELECT:
+                self._select_retro_item()
+            elif action == InputAction.PLAY_PAUSE:
+                self.app.audio.toggle_pause()
+        else:
+            if action == InputAction.SCROLL_UP:
+                self.menu_list.scroll_up()
+            elif action == InputAction.SCROLL_DOWN:
+                self.menu_list.scroll_down()
+            elif action == InputAction.SELECT:
+                self._select_item()
+            elif action == InputAction.PLAY_PAUSE:
+                self.app.audio.toggle_pause()
+
+    def _select_retro_item(self):
+        action = self.RETRO_ITEMS[self.retro_selected_index]
+        if action == "music":
+            from ui.screens.library import LibraryScreen
+            self.app.screen_manager.push(LibraryScreen(self.app, mode="songs"))
+        elif action == "artists":
+            from ui.screens.library import LibraryScreen
+            self.app.screen_manager.push(LibraryScreen(self.app, mode="artists"))
+        elif action == "albums":
+            from ui.screens.library import LibraryScreen
+            self.app.screen_manager.push(LibraryScreen(self.app, mode="albums"))
+        elif action == "settings":
+            from ui.screens.settings import SettingsScreen
+            self.app.screen_manager.push(SettingsScreen(self.app))
 
     def _select_item(self):
         item = self.menu_list.selected_item
@@ -95,9 +124,72 @@ class MainMenuScreen(Screen):
         self.menu_list.update(dt)
 
     def render(self, surface, x_offset=0):
-        draw_gradient_bg_cached(surface)
-        self.status_bar.render(surface, x_offset)
-        self.menu_list.render(surface, x_offset)
+        if getattr(config, "THEME", "modern") == "retro":
+            self._render_retro(surface, x_offset)
+        else:
+            draw_gradient_bg_cached(surface)
+            self.status_bar.render(surface, x_offset)
+            self.menu_list.render(surface, x_offset)
+
+    def _render_retro(self, surface, x_offset):
+        surface.fill(Colors.RETRO_BG_DARK)
+        
+        self.status_bar.render(surface, x_offset, title="TAPE-A")
+        
+        # ── Header ──
+        render_text(surface, "MEDIA LIBRARY", (x_offset + 24, 30), font=Fonts.body(bold=True), color=(240, 240, 240))
+        
+        # ── 2x2 Grid ──
+        grid_y = 56
+        gw, gh = 138, 55
+        gap = 10
+        start_x = x_offset + (config.SCREEN_WIDTH - (gw * 2 + gap)) // 2
+        
+        labels = ["SONGS", "ARTISTS", "ALBUMS", "SETTINGS"]
+        
+        for i in range(4):
+            col = i % 2
+            row = i // 2
+            bx = start_x + col * (gw + gap)
+            by = grid_y + row * (gh + gap)
+            
+            selected = (i == self.retro_selected_index)
+            
+            # Button BG
+            bg_color = Colors.RETRO_PRIMARY if i < 2 else (60, 45, 20)
+            text_color = Colors.RETRO_BG_DARK if i < 2 else Colors.RETRO_PRIMARY
+            
+            if selected:
+                by += 2  # pressed effect
+                draw_rounded_rect(surface, bg_color, (bx, by, gw, gh), radius=8)
+            else:
+                draw_rounded_rect(surface, bg_color, (bx, by, gw, gh), radius=8)
+                # thick border/shadow
+                pygame.draw.rect(surface, Colors.RETRO_ORANGE_DARK if i < 2 else (40, 30, 15), 
+                                 (bx, by + gh - 4, gw, 4), border_bottom_left_radius=8, border_bottom_right_radius=8)
+                
+            # Outline for bottom row
+            if i >= 2:
+                pygame.draw.rect(surface, (*Colors.RETRO_PRIMARY[:3], 100), (bx, by, gw, gh), width=2, border_radius=8)
+
+            label_surf = Fonts.tiny(bold=True).render(labels[i], True, text_color)
+            surface.blit(label_surf, (bx + gw//2 - label_surf.get_width()//2, by + gh//2 - label_surf.get_height()//2 - 2))
+            
+        # ── Bottom Nav / Mini Player ──
+        bar_y = config.SCREEN_HEIGHT - 40
+        pygame.draw.rect(surface, (40, 30, 20), (x_offset, bar_y, config.SCREEN_WIDTH, 40))
+        pygame.draw.rect(surface, (*Colors.RETRO_PRIMARY[:3], 50), (x_offset, bar_y, config.SCREEN_WIDTH, 1))
+        
+        trk = self.app.playlist.current_track
+        track_name = trk.display_title if trk else "Not Playing"
+            
+        render_text(surface, "NOW PLAYING", (x_offset + 12, bar_y + 6), font=Fonts.tiny(bold=True), color=(150, 100, 30))
+        render_text(surface, track_name[:20], (x_offset + 12, bar_y + 20), font=Fonts.body(), color=(240, 240, 240))
+        
+        is_playing = self.app.audio.is_playing
+        state_str = "|| PAUSE" if trk and not is_playing else ">> PLAY"
+        if not trk: state_str = "--"
+        render_text(surface, state_str, (x_offset + config.SCREEN_WIDTH - 60, bar_y + 14), font=Fonts.tiny(bold=True), color=Colors.RETRO_PRIMARY)
         self.bottom_nav.render(surface, x_offset)
 
     def _render_menu_item(self, surface, item, rect, selected, x_offset):

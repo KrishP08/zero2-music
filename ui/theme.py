@@ -50,7 +50,11 @@ class Colors:
     # Badge colors
     BADGE_FLAC = (37, 123, 244)
     BADGE_MP3 = (80, 90, 110)
-
+    # Retro Theme Constants
+    RETRO_PRIMARY = (242, 147, 13)       # #f2930d
+    RETRO_BG_LIGHT = (248, 247, 245)     # #f8f7f5
+    RETRO_BG_DARK = (34, 27, 16)         # #221b10
+    RETRO_ORANGE_DARK = (153, 51, 0)     # active state border/accents
 
 # ════════════════════════════════════════════════════════════════════
 #  FONT MANAGER — Space Grotesk
@@ -103,28 +107,28 @@ class Fonts:
         return None
 
     @classmethod
-    def title(cls):
-        return cls.get(16, bold=True)
+    def title(cls, bold=True):
+        return cls.get(16, bold=bold)
 
     @classmethod
-    def body(cls):
-        return cls.get(13)
+    def body(cls, bold=False):
+        return cls.get(13, bold=bold)
 
     @classmethod
-    def small(cls):
-        return cls.get(10)
+    def small(cls, bold=False):
+        return cls.get(10, bold=bold)
 
     @classmethod
-    def tiny(cls):
-        return cls.get(9, bold=True)
+    def tiny(cls, bold=True):
+        return cls.get(9, bold=bold)
 
     @classmethod
-    def large(cls):
-        return cls.get(20, bold=True)
+    def large(cls, bold=True):
+        return cls.get(20, bold=bold)
 
     @classmethod
-    def huge(cls):
-        return cls.get(28, bold=True)
+    def huge(cls, bold=True):
+        return cls.get(28, bold=bold)
 
 
 # ════════════════════════════════════════════════════════════════════

@@ -4,6 +4,7 @@ Scan and connect to WiFi networks.
 """
 
 import threading
+import pygame
 from ui.screen_manager import Screen
 from ui.theme import Colors, Fonts, draw_gradient_bg_cached, render_text, draw_rounded_rect
 from ui.widgets import StatusBar, BottomNavBar, ScrollList
@@ -120,36 +121,67 @@ class WiFiScreen(Screen):
             self.scroll_list.update(dt)
 
     def render(self, surface, x_offset=0):
-        draw_gradient_bg_cached(surface)
-        self.status_bar.render(surface, x_offset)
+        is_retro = getattr(config, "THEME", "modern") == "retro"
+        
+        if is_retro:
+            surface.fill(Colors.RETRO_BG_DARK)
+            pygame.draw.rect(surface, (*Colors.RETRO_PRIMARY[:3], 30), (x_offset, 0, config.SCREEN_WIDTH, 20))
+            pygame.draw.rect(surface, (*Colors.RETRO_PRIMARY[:3], 50), (x_offset, 19, config.SCREEN_WIDTH, 1))
+            render_text(surface, "SYSTEM PAIRING", (x_offset + 24, 4), font=Fonts.tiny(bold=True), color=Colors.RETRO_PRIMARY)
+        else:
+            draw_gradient_bg_cached(surface)
+            self.status_bar.render(surface, x_offset)
+            
         if self.scroll_list:
             self.scroll_list.render(surface, x_offset)
         self.bottom_nav.render(surface, x_offset)
 
         if self._status_msg:
             y = config.SCREEN_HEIGHT - BottomNavBar.HEIGHT - 28
-            draw_rounded_rect(surface, (0, 0, 0, 200),
+            draw_rounded_rect(surface, (0, 0, 0, 200) if not is_retro else (*Colors.RETRO_PRIMARY[:3], 40),
                               (x_offset + 10, y, config.SCREEN_WIDTH - 20, 24), radius=8)
             render_text(surface, self._status_msg,
                         (x_offset + config.SCREEN_WIDTH // 2, y + 12),
-                        font=Fonts.small(), color=Colors.ACCENT, center=True)
+                        font=Fonts.small(), color=Colors.ACCENT if not is_retro else Colors.WHITE, center=True)
 
     def _render_item(self, surface, item, rect, selected, x_offset):
         x, y, w, h = rect
         label = item.get("label", "")
         value = item.get("value", "")
 
-        label_color = Colors.TEXT_PRIMARY if selected else Colors.TEXT_SECONDARY
-        max_w = w - 60 if value else w - 20
-        render_text(surface, label, (x + 12, y + (h - 14) // 2),
-                    font=Fonts.body(), color=label_color, max_width=max_w)
-
-        if value:
-            if value in ("On", "✓"):
-                val_color = Colors.BATTERY_GREEN
+        is_retro = getattr(config, "THEME", "modern") == "retro"
+        
+        if is_retro:
+            if selected:
+                pygame.draw.rect(surface, (80, 50, 20), (x, y, w, h))
+                pygame.draw.rect(surface, Colors.RETRO_PRIMARY, (x, y+h-1, w, 1))
             else:
-                val_color = Colors.ACCENT if selected else Colors.TEXT_MUTED
-            val_w = Fonts.small().size(value)[0]
-            render_text(surface, value,
-                        (x + w - val_w - 8, y + (h - 10) // 2),
-                        font=Fonts.small(), color=val_color)
+                pygame.draw.rect(surface, (80, 50, 20), (x, y+h-1, w, 1))
+                
+            label_color = Colors.RETRO_PRIMARY if selected else (240, 240, 240)
+            max_w = w - 60 if value else w - 20
+            render_text(surface, label.upper(), (x + 12, y + (h - 12) // 2),
+                        font=Fonts.tiny(bold=True), color=label_color, max_width=max_w)
+
+            if value:
+                val_color = Colors.RETRO_PRIMARY if selected else (150, 150, 150)
+                val_w = Fonts.tiny(bold=True).size(value.upper())[0]
+                render_text(surface, value.upper(),
+                            (x + w - val_w - 8, y + (h - 12) // 2),
+                            font=Fonts.tiny(bold=True), color=val_color)
+                            
+        else:
+            label_color = Colors.TEXT_PRIMARY if selected else Colors.TEXT_SECONDARY
+            max_w = w - 60 if value else w - 20
+            render_text(surface, label, (x + 12, y + (h - 14) // 2),
+                        font=Fonts.body(), color=label_color, max_width=max_w)
+
+            if value:
+                if value in ("On", "✓"):
+                    val_color = Colors.BATTERY_GREEN
+                else:
+                    val_color = Colors.ACCENT if selected else Colors.TEXT_MUTED
+                val_w = Fonts.small().size(value)[0]
+                render_text(surface, value,
+                            (x + w - val_w - 8, y + (h - 10) // 2),
+                            font=Fonts.small(), color=val_color)

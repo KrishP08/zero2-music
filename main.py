@@ -124,6 +124,10 @@ class App:
                     break
                 elif isinstance(action, tuple) and action[0] == "__PYGAME_EVENT__":
                     self.audio.handle_event(action[1])
+                elif action == InputAction.VOLUME_UP:
+                    self.audio.volume_up(config.VOLUME_STEP)
+                elif action == InputAction.VOLUME_DOWN:
+                    self.audio.volume_down(config.VOLUME_STEP)
                 else:
                     self.screen_manager.handle_input(action)
 

@@ -23,10 +23,26 @@ DISPLAY_DC_PIN = 25
 DISPLAY_RST_PIN = 27
 DISPLAY_BL_PIN = 18
 
-# ── Rotary Encoder GPIO Pins ───────────────────────────────────────
-ROTARY_CLK_PIN = 17
-ROTARY_DT_PIN = 22
-ROTARY_SW_PIN = 23
+# ── GPIO Button Pins (gamepad layout) ──────────────────────────────
+GPIO_BUTTONS = {
+    "DPAD_UP":   17,
+    "DPAD_DOWN": 27,
+    "DPAD_LEFT": 22,
+    "DPAD_RIGHT":23,
+    "A":         4,
+    "B":         3,
+    "X":         2,
+    "Y":         18,
+    "L":         5,
+    "R":         6,
+    "L2":        12,
+    "R2":        16,
+    "START":     20,
+    "SELECT":    21,
+}
+
+# ── Volume ──────────────────────────────────────────────────────────
+VOLUME_STEP = 0.05
 
 # ── Audio ───────────────────────────────────────────────────────────
 AUDIO_FREQUENCY = 44100
@@ -45,7 +61,7 @@ LIBRARY_CACHE_FILE = os.path.join(
 FONT_NAME = "Inter"
 FONT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "fonts")
 ICON_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "icons")
-NOW_PLAYING_THEME = "square"
+THEME = "modern"
 
 # ── Paths ───────────────────────────────────────────────────────────
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))

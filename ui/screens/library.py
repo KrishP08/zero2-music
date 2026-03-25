@@ -4,6 +4,7 @@ Browse by Artists, Albums, or Songs with folder/file grouping.
 """
 
 import os
+import pygame
 from ui.screen_manager import Screen
 from ui.theme import Colors, Fonts, draw_gradient_bg_cached, render_text, draw_rounded_rect, load_icon, tint_icon
 from ui.widgets import StatusBar, BottomNavBar, ScrollList
@@ -53,8 +54,8 @@ class LibraryScreen(Screen):
                 self._tracks.sort(key=lambda t: t.display_title.lower())
                 
             items.append({
-                "label": f"Sort: {'Name' if self.sort_mode == 'name' else 'Date Added'}",
-                "subtitle": "Click to toggle sort order",
+                "label": f"CURRENT SORT: {self.sort_mode.upper()}",
+                "subtitle": "Click to toggle order",
                 "action": "toggle_sort",
                 "is_action": True,
             })
@@ -127,11 +128,15 @@ class LibraryScreen(Screen):
         if not items:
             items = [{"label": "No music found", "subtitle": "Add files to ~/Music"}]
 
+        is_retro = getattr(config, "THEME", "modern") == "retro"
+        
         self.scroll_list = ScrollList(
-            items, header=header,
-            item_renderer=self._render_item,
+            items, header=header if not is_retro else None,
+            item_renderer=self._render_retro_item if is_retro else self._render_item,
             bottom_margin=BottomNavBar.HEIGHT,
         )
+        if is_retro:
+            self.scroll_list._top_offset = 48
 
     def handle_input(self, action):
         if action == InputAction.SCROLL_UP:
@@ -183,11 +188,93 @@ class LibraryScreen(Screen):
             self.scroll_list.update(dt)
 
     def render(self, surface, x_offset=0):
-        draw_gradient_bg_cached(surface)
-        self.status_bar.render(surface, x_offset, title="MUSIC EXPLORER")
-        if self.scroll_list:
-            self.scroll_list.render(surface, x_offset)
-        self.bottom_nav.render(surface, x_offset)
+        is_retro = getattr(config, "THEME", "modern") == "retro"
+        
+        if is_retro:
+            surface.fill(Colors.RETRO_BG_DARK)
+            self.status_bar.render(surface, x_offset, title="MUSIC EXPLORER")
+            
+            # Retro Sorting Tabs
+            tab_y = 24 # Adjusted from 20 to 24 to account for status bar height
+            pygame.draw.rect(surface, (*Colors.RETRO_PRIMARY[:3], 10), (x_offset, tab_y, config.SCREEN_WIDTH, 28))
+            pygame.draw.rect(surface, (*Colors.RETRO_PRIMARY[:3], 40), (x_offset, tab_y+27, config.SCREEN_WIDTH, 1))
+            
+            is_name_sort = self.sort_mode == "name"
+            # Tab 1: Name
+            pygame.draw.rect(surface, (*Colors.RETRO_PRIMARY[:3], 40) if is_name_sort else (0,0,0,0), (x_offset, tab_y, 100, 28))
+            pygame.draw.rect(surface, Colors.RETRO_PRIMARY if is_name_sort else Colors.TRANSPARENT, (x_offset, tab_y+26, 100, 2))
+            render_text(surface, "NAME", (x_offset + 32, tab_y + 6), font=Fonts.tiny(bold=True), color=Colors.RETRO_PRIMARY if is_name_sort else (*Colors.RETRO_PRIMARY[:3], 150))
+            
+            # Tab 2: Date
+            is_date_sort = not is_name_sort
+            pygame.draw.rect(surface, (*Colors.RETRO_PRIMARY[:3], 40) if is_date_sort else (0,0,0,0), (x_offset + 100, tab_y, 100, 28))
+            pygame.draw.rect(surface, Colors.RETRO_PRIMARY if is_date_sort else Colors.TRANSPARENT, (x_offset + 100, tab_y+26, 100, 2))
+            render_text(surface, "DATE", (x_offset + 132, tab_y + 6), font=Fonts.tiny(bold=True), color=Colors.RETRO_PRIMARY if is_date_sort else (*Colors.RETRO_PRIMARY[:3], 150))
+            
+            if self.scroll_list:
+                self.scroll_list.render(surface, x_offset)
+                
+            self.bottom_nav.render(surface, x_offset)
+
+        else:
+            draw_gradient_bg_cached(surface)
+            self.status_bar.render(surface, x_offset, title="MUSIC EXPLORER")
+            if self.scroll_list:
+                self.scroll_list.render(surface, x_offset)
+            self.bottom_nav.render(surface, x_offset)
+
+    def _render_retro_item(self, surface, item, rect, selected, x_offset):
+        x, y, w, h = rect
+        label = item.get("label", "")
+        subtitle = item.get("subtitle", "")
+        is_folder = item.get("is_folder", False)
+        is_action = item.get("is_action", False)
+        
+        icon_size = 28
+        icon_x = x + 8
+        icon_y = y + (h - icon_size) // 2
+        
+        if selected:
+            # Active Row BG
+            pygame.draw.rect(surface, (80, 50, 20), (x, y, w, h))
+            pygame.draw.rect(surface, Colors.RETRO_PRIMARY, (x, y+h-1, w, 1))
+        else:
+            pygame.draw.rect(surface, (80, 50, 20), (x, y+h-1, w, 1))
+            
+        # Check for music thumbnail
+        track = item.get("track")
+        thumb = self._get_thumbnail(track) if track else None
+
+        if selected:
+            pygame.draw.circle(surface, (*Colors.RETRO_PRIMARY[:3], 60), (icon_x + 14, icon_y + 14), 14)
+            pygame.draw.circle(surface, Colors.RETRO_PRIMARY, (icon_x + 14, icon_y + 14), 14, 1)
+            char = "»" if not is_folder else "📁"
+            if not thumb:
+                render_text(surface, char, (icon_x + 10, icon_y + 4), font=Fonts.body(), color=Colors.RETRO_PRIMARY)
+        else:
+            draw_rounded_rect(surface, (40, 30, 15), (icon_x, icon_y, icon_size, icon_size), radius=6)
+            pygame.draw.rect(surface, (120, 80, 30), (icon_x, icon_y, icon_size, icon_size), 1, border_radius=6)
+            char = "»" if not is_folder else "📁"
+            if is_action: char = "↕"
+            if not thumb:
+                render_text(surface, char, (icon_x + 10, icon_y + 4), font=Fonts.body(), color=Colors.RETRO_PRIMARY)
+                
+        if thumb:
+            surface.blit(thumb, (icon_x, icon_y))
+            pygame.draw.rect(surface, Colors.RETRO_PRIMARY if selected else (120, 80, 30), (icon_x, icon_y, icon_size, icon_size), 1, border_radius=5)
+
+        text_x = icon_x + icon_size + 12
+        text_color = Colors.RETRO_PRIMARY if selected else (240, 240, 240)
+        sub_color = (180, 120, 60) if selected else (150, 150, 150)
+        
+        render_text(surface, label[:24].upper(), (text_x, y + 6), font=Fonts.tiny(bold=True), color=text_color)
+        if subtitle:
+            render_text(surface, subtitle[:28].upper(), (text_x, y + 20), font=Fonts.tiny(), color=sub_color)
+            
+        # Right action icon
+        right_char = ">>" if not is_folder else "›"
+        if selected: right_char = "[›]"
+        render_text(surface, right_char, (x + w - 30, y + 10), font=Fonts.tiny(bold=True), color=Colors.RETRO_PRIMARY)
 
     def _render_item(self, surface, item, rect, selected, x_offset):
         x, y, w, h = rect

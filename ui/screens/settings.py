@@ -44,9 +44,9 @@ class SettingsScreen(Screen):
         self._cards = [
             {
                 "label": "Theme",
-                "subtitle": getattr(config, "NOW_PLAYING_THEME", "square").title(),
+                "subtitle": getattr(config, "THEME", "modern").title(),
                 "icon": "settings",
-                "enabled": getattr(config, "NOW_PLAYING_THEME", "square") == "round",
+                "enabled": getattr(config, "THEME", "modern") == "retro",
                 "action": "theme",
             },
             {
@@ -117,8 +117,8 @@ class SettingsScreen(Screen):
             from ui.screens.bluetooth import BluetoothScreen
             self.app.screen_manager.push(BluetoothScreen(self.app))
         elif action == "theme":
-            current = getattr(config, "NOW_PLAYING_THEME", "square")
-            config.NOW_PLAYING_THEME = "round" if current == "square" else "square"
+            current = getattr(config, "THEME", "modern")
+            config.THEME = "retro" if current == "modern" else "modern"
             self._build_cards()
         elif action == "shuffle":
             self.app.playlist.toggle_shuffle()
@@ -140,46 +140,106 @@ class SettingsScreen(Screen):
         pass
 
     def render(self, surface, x_offset=0):
-        draw_gradient_bg_cached(surface)
-
-        # Header
-        self.status_bar.render(surface, x_offset)
-
-        # Title row
-        header_y = StatusBar.HEIGHT + 2
-        icon = self._icons.get("settings")
-        if icon:
-            tinted = tint_icon(icon, Colors.ACCENT)
-            surface.blit(tinted, (x_offset + 10, header_y + 2))
-        render_text(surface, "SETTINGS",
-                    (x_offset + 32, header_y + 2),
-                    font=Fonts.tiny(), color=Colors.TEXT_PRIMARY)
-
-        # 2-column card grid
-        grid_y = header_y + 22
-        grid_x = x_offset + 8
-        card_w = (config.SCREEN_WIDTH - 24) // 2
-        card_h = 72
-        gap = 8
-
-        # Calculate scrolling offset
-        target_row = self.selected_index // 2
-        scroll_offset = max(0, (target_row - 1) * (card_h + gap))
+        is_retro = getattr(config, "THEME", "modern") == "retro"
         
-        # Set clipping area so scrolled cards don't draw over the header
-        clip_rect = pygame.Rect(x_offset, grid_y - 2, config.SCREEN_WIDTH, config.SCREEN_HEIGHT - grid_y - 32)
-        surface.set_clip(clip_rect)
+        if is_retro:
+            self._render_retro(surface, x_offset)
+        else:
+            draw_gradient_bg_cached(surface)
+            self.status_bar.render(surface, x_offset)
 
+            # Title row
+            header_y = StatusBar.HEIGHT + 2
+            icon = self._icons.get("settings")
+            if icon:
+                tinted = tint_icon(icon, Colors.ACCENT)
+                surface.blit(tinted, (x_offset + 10, header_y + 2))
+            render_text(surface, "SETTINGS",
+                        (x_offset + 32, header_y + 2),
+                        font=Fonts.tiny(), color=Colors.TEXT_PRIMARY)
+
+            # 2-column card grid
+            grid_y = header_y + 22
+            grid_x = x_offset + 8
+            card_w = (config.SCREEN_WIDTH - 24) // 2
+            card_h = 72
+            gap = 8
+
+            target_row = self.selected_index // 2
+            scroll_offset = max(0, (target_row - 1) * (card_h + gap))
+            
+            clip_rect = pygame.Rect(x_offset, grid_y - 2, config.SCREEN_WIDTH, config.SCREEN_HEIGHT - grid_y - 32)
+            surface.set_clip(clip_rect)
+
+            for i, card in enumerate(self._cards):
+                col = i % 2
+                row = i // 2
+                cx = grid_x + col * (card_w + gap)
+                cy = grid_y + row * (card_h + gap) - scroll_offset
+                selected = (i == self.selected_index)
+
+                self._render_card(surface, card, (cx, cy, card_w, card_h), selected)
+
+            surface.set_clip(None)
+            self.bottom_nav.render(surface, x_offset)
+            
+    def _render_retro(self, surface, x_offset):
+        surface.fill(Colors.RETRO_BG_DARK)
+        
+        self.status_bar.render(surface, x_offset, title="SYSTEM PARAMETERS")
+        
+        # ── Header ──
+        render_text(surface, "SETTINGS", (x_offset + 24, 30), font=Fonts.body(bold=True), color=(240, 240, 240))
+        
+        # ── 2x2 Grid (matching main menu style) ──
+        grid_y = 56
+        gw, gh = 138, 55
+        gap = 10
+        start_x = x_offset + (config.SCREEN_WIDTH - (gw * 2 + gap)) // 2
+        
         for i, card in enumerate(self._cards):
+            if i >= 6:  # Max 6 cards (3 rows)
+                break
             col = i % 2
             row = i // 2
-            cx = grid_x + col * (card_w + gap)
-            cy = grid_y + row * (card_h + gap) - scroll_offset
+            bx = start_x + col * (gw + gap)
+            by = grid_y + row * (gh + gap)
+            
             selected = (i == self.selected_index)
+            label = card.get("label", "").upper()
+            enabled = card.get("enabled")
+            
+            # Alternating button styles
+            if enabled:
+                bg_color = Colors.RETRO_PRIMARY
+                text_color = Colors.RETRO_BG_DARK
+            else:
+                bg_color = (60, 45, 20)
+                text_color = Colors.RETRO_PRIMARY
+            
+            if selected:
+                by += 2  # pressed effect
+                draw_rounded_rect(surface, bg_color, (bx, by, gw, gh), radius=8)
+            else:
+                draw_rounded_rect(surface, bg_color, (bx, by, gw, gh), radius=8)
+                shadow_color = Colors.RETRO_ORANGE_DARK if enabled else (40, 30, 15)
+                pygame.draw.rect(surface, shadow_color, 
+                                 (bx, by + gh - 4, gw, 4), border_bottom_left_radius=8, border_bottom_right_radius=8)
+                 
+            # Outline for non-enabled
+            if not enabled:
+                pygame.draw.rect(surface, (120, 80, 30), (bx, by, gw, gh), width=2, border_radius=8)
 
-            self._render_card(surface, card, (cx, cy, card_w, card_h), selected)
+            # Label text
+            label_surf = Fonts.tiny(bold=True).render(label, True, text_color)
+            surface.blit(label_surf, (bx + gw//2 - label_surf.get_width()//2, by + 10))
+            
+            # Status text below label
+            subtitle = str(card.get("subtitle", "")).upper()
+            sub_color = Colors.RETRO_BG_DARK if enabled else (150, 100, 40)
+            sub_surf = Fonts.tiny().render(subtitle, True, sub_color)
+            surface.blit(sub_surf, (bx + gw//2 - sub_surf.get_width()//2, by + gh - 22))
 
-        surface.set_clip(None)
         self.bottom_nav.render(surface, x_offset)
 
     def _render_card(self, surface, card, rect, selected):

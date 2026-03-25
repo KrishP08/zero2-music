@@ -1,12 +1,11 @@
 """
 Input Handler — unified input abstraction.
-Maps keyboard events (desktop) or rotary encoder events (Pi)
+Maps keyboard events (desktop) or GPIO button events (Pi)
 into a common set of actions.
 """
 
 import pygame
 import config
-from hardware.rotary_encoder import RotaryEncoder, RotaryEvent
 
 
 class InputAction:
@@ -24,10 +23,18 @@ class InputAction:
 
 
 class InputHandler:
-    """Merges keyboard and rotary encoder into unified input stream."""
+    """Merges keyboard and GPIO buttons into unified input stream."""
 
     def __init__(self):
-        self._rotary = RotaryEncoder() if config.IS_PI else None
+        self._gpio = None
+        if config.IS_PI:
+            try:
+                from hardware.gpio_buttons import GpioButtons, ButtonEvent
+                self._gpio = GpioButtons()
+                self._ButtonEvent = ButtonEvent
+            except Exception as e:
+                print(f"[Input] GPIO buttons not available: {e}")
+
         self._actions = []
 
     def poll(self):
@@ -66,21 +73,30 @@ class InputHandler:
             elif event.type == pygame.USEREVENT + 1:
                 self._actions.append(("__PYGAME_EVENT__", event))
 
-        # ── Rotary encoder (Pi mode) ────────────────────────────
-        if self._rotary:
-            for evt in self._rotary.get_events():
-                if evt == RotaryEvent.CLOCKWISE:
-                    self._actions.append(InputAction.SCROLL_DOWN)
-                elif evt == RotaryEvent.COUNTER_CLOCKWISE:
-                    self._actions.append(InputAction.SCROLL_UP)
-                elif evt == RotaryEvent.BUTTON_PRESS:
-                    self._actions.append(InputAction.SELECT)
-                elif evt == RotaryEvent.BUTTON_LONG_PRESS:
-                    self._actions.append(InputAction.BACK)
+        # ── GPIO Buttons (Pi mode) ──────────────────────────────
+        if self._gpio:
+            BE = self._ButtonEvent
+            _MAP = {
+                BE.DPAD_UP:    InputAction.SCROLL_UP,
+                BE.DPAD_DOWN:  InputAction.SCROLL_DOWN,
+                BE.DPAD_LEFT:  InputAction.PREV_TRACK,
+                BE.DPAD_RIGHT: InputAction.NEXT_TRACK,
+                BE.BTN_A:      InputAction.SELECT,
+                BE.BTN_B:      InputAction.BACK,
+                BE.BTN_X:      InputAction.PLAY_PAUSE,
+                BE.BTN_L:      InputAction.VOLUME_DOWN,
+                BE.BTN_R:      InputAction.VOLUME_UP,
+                BE.BTN_START:  InputAction.PLAY_PAUSE,
+                BE.BTN_SELECT: InputAction.BACK,
+            }
+            for evt in self._gpio.get_events():
+                action = _MAP.get(evt)
+                if action:
+                    self._actions.append(action)
 
         return self._actions
 
     def cleanup(self):
         """Release resources."""
-        if self._rotary:
-            self._rotary.cleanup()
+        if self._gpio:
+            self._gpio.cleanup()

@@ -28,20 +28,28 @@ class StatusBar:
         self._battery_icon = load_icon("battery", size=(14, 14))
 
     def render(self, surface, x_offset=0, title=None, show_back=False):
+        is_retro = getattr(config, "THEME", "modern") == "retro"
+        
         # Bar background
         bar_rect = (x_offset, 0, config.SCREEN_WIDTH, self.HEIGHT)
-        draw_rounded_rect(surface, (10, 14, 22, 220), bar_rect, radius=0)
+        if is_retro:
+            pygame.draw.rect(surface, (*Colors.RETRO_PRIMARY[:3], 30), bar_rect)
+            pygame.draw.rect(surface, (*Colors.RETRO_PRIMARY[:3], 50), (x_offset, self.HEIGHT - 1, config.SCREEN_WIDTH, 1))
+        else:
+            draw_rounded_rect(surface, (10, 14, 22, 220), bar_rect, radius=0)
+
+        text_color = Colors.RETRO_PRIMARY if is_retro else Colors.TEXT_MUTED
 
         # Left side: title or time
         if title:
             render_text(surface, title,
                         (x_offset + (28 if show_back else 8), 4),
-                        font=Fonts.tiny(), color=Colors.TEXT_MUTED)
+                        font=Fonts.tiny(bold=True) if is_retro else Fonts.tiny(), color=text_color)
         else:
             now = time.strftime("%H:%M")
             render_text(surface, now,
                         (x_offset + 8, 4),
-                        font=Fonts.tiny(), color=Colors.TEXT_MUTED)
+                        font=Fonts.tiny(bold=True) if is_retro else Fonts.tiny(), color=text_color)
 
         # Right side icons
         ix = x_offset + config.SCREEN_WIDTH - 8
@@ -49,19 +57,19 @@ class StatusBar:
         # Battery
         if self._battery_icon:
             ix -= 14
-            tinted = tint_icon(self._battery_icon, Colors.BATTERY_GREEN)
+            tinted = tint_icon(self._battery_icon, text_color if is_retro else Colors.BATTERY_GREEN)
             surface.blit(tinted, (ix, 5))
 
         # WiFi
         if self._wifi_icon:
             ix -= 16
-            tinted = tint_icon(self._wifi_icon, Colors.TEXT_MUTED)
+            tinted = tint_icon(self._wifi_icon, text_color)
             surface.blit(tinted, (ix, 6))
 
         # Bluetooth
         if self._bt_icon:
             ix -= 16
-            tinted = tint_icon(self._bt_icon, Colors.TEXT_MUTED)
+            tinted = tint_icon(self._bt_icon, text_color)
             surface.blit(tinted, (ix, 6))
 
 
@@ -91,14 +99,16 @@ class BottomNavBar:
     def render(self, surface, x_offset=0):
         y = config.SCREEN_HEIGHT - self.HEIGHT
         w = config.SCREEN_WIDTH
+        is_retro = getattr(config, "THEME", "modern") == "retro"
 
         # Background
         bg_rect = (x_offset, y, w, self.HEIGHT)
-        draw_rounded_rect(surface, (10, 15, 22, 230), bg_rect, radius=0)
-
-        # Top border
-        pygame.draw.line(surface, Colors.DIVIDER,
-                         (x_offset, y), (x_offset + w, y))
+        if is_retro:
+            draw_rounded_rect(surface, (15, 12, 8, 255), bg_rect, radius=0)
+            pygame.draw.line(surface, Colors.RETRO_PRIMARY, (x_offset, y), (x_offset + w, y))
+        else:
+            draw_rounded_rect(surface, (10, 15, 22, 230), bg_rect, radius=0)
+            pygame.draw.line(surface, Colors.DIVIDER, (x_offset, y), (x_offset + w, y))
 
         # Tabs
         tab_w = w // len(self.TABS)
@@ -110,14 +120,19 @@ class BottomNavBar:
             # Icon
             icon_surf = self._icons.get(tab["icon"])
             if icon_surf:
-                color = Colors.ACCENT if is_active else Colors.TEXT_MUTED
+                if is_retro:
+                    color = Colors.RETRO_PRIMARY if is_active else (*Colors.RETRO_PRIMARY[:3], 100)
+                else:
+                    color = Colors.ACCENT if is_active else Colors.TEXT_MUTED
                 tinted = tint_icon(icon_surf, color)
                 surface.blit(tinted, (tx - 9, ty))
             
             # Active dot
             if is_active:
-                pygame.draw.circle(surface, Colors.ACCENT,
-                                   (tx, ty + 24), 2)
+                if is_retro:
+                    pygame.draw.circle(surface, Colors.RETRO_PRIMARY, (tx, ty + 22), 2)
+                else:
+                    pygame.draw.circle(surface, Colors.ACCENT, (tx, ty + 24), 2)
 
 
 # ════════════════════════════════════════════════════════════════════
