@@ -26,7 +26,8 @@ import config
 # ── Set SDL environment BEFORE importing/initializing pygame ────────
 # This MUST happen before pygame.init() touches the audio/video drivers
 if config.IS_PI:
-    os.environ["SDL_AUDIODRIVER"] = "alsa"
+    # PulseAudio/PipeWire handles Bluetooth audio routing automatically
+    os.environ["SDL_AUDIODRIVER"] = "pulseaudio"
     os.environ["SDL_VIDEODRIVER"] = "dummy"
     os.environ["SDL_NOMOUSE"] = "1"
 

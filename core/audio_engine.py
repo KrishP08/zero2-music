@@ -31,33 +31,54 @@ class AudioEngine:
         self._current_file = None
         self._track_length = 0.0
         self._start_pos = 0.0  # offset when seeking
+        self._init_params = (frequency, size, channels, buffer)
         self._callbacks = {
             "on_track_end": [],
             "on_state_change": [],
         }
 
-        if _MIXER_AVAILABLE:
-            try:
-                pygame.mixer.pre_init(frequency, size, channels, buffer)
-                pygame.mixer.init()
-                pygame.mixer.music.set_endevent(pygame.USEREVENT + 1)
-                pygame.mixer.music.set_volume(self._volume)
-                self._mixer_ok = True
-            except Exception as e:
-                print(f"[AudioEngine] ⚠ Mixer init failed: {e}")
-                self._mixer_ok = False
+        self._try_init_mixer()
 
+    def _try_init_mixer(self):
+        """Attempt to initialize the pygame mixer."""
+        if self._mixer_ok:
+            return True
+        if not _MIXER_AVAILABLE:
+            return False
+        try:
+            freq, size, channels, buf = self._init_params
+            if pygame.mixer.get_init():
+                pygame.mixer.quit()
+            pygame.mixer.pre_init(freq, size, channels, buf)
+            pygame.mixer.init()
+            pygame.mixer.music.set_endevent(pygame.USEREVENT + 1)
+            pygame.mixer.music.set_volume(self._volume)
+            self._mixer_ok = True
+            print("[AudioEngine] ✓ Mixer initialized (audio ready)")
+            return True
+        except Exception as e:
+            print(f"[AudioEngine] ⚠ Mixer init failed: {e}")
+            self._mixer_ok = False
+            return False
+
+    def retry_init(self):
+        """Retry mixer initialization (call after BT headphones connect)."""
         if not self._mixer_ok:
-            print("[AudioEngine] ⚠ Running WITHOUT audio (pygame.mixer unavailable)")
-            print("[AudioEngine]   UI will work — audio playback is disabled")
+            return self._try_init_mixer()
+        return True
 
     # ── Playback Controls ───────────────────────────────────────────
     def play(self, filepath):
         """Load and play an audio file."""
+        # Auto-retry mixer init if it wasn't ready at startup
+        if not self._mixer_ok:
+            self._try_init_mixer()
+
         if not self._mixer_ok:
             self._current_file = filepath
             self._track_length = self._get_track_length(filepath)
             print(f"[AudioEngine] (no-op) Would play: {filepath}")
+            print(f"[AudioEngine]   Connect Bluetooth headphones first!")
             return
         try:
             pygame.mixer.music.load(filepath)

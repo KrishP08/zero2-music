@@ -150,9 +150,10 @@ class BluetoothManager:
         if not self._available:
             return False
         try:
-            result = self._run_cmd(["bluetoothctl", "pair", mac], timeout=15)
-            return result is not None and result.returncode == 0
-        except Exception:
+            result = self._bt_cmd(f"trust {mac}\npair {mac}\n", timeout=20)
+            return "Pairing successful" in result or "already" in result.lower()
+        except Exception as e:
+            print(f"[BT] Pair error: {e}")
             return False
 
     def connect(self, mac):
@@ -160,13 +161,31 @@ class BluetoothManager:
         if not self._available:
             return False
         try:
-            result = self._run_cmd(["bluetoothctl", "connect", mac], timeout=10)
-            success = result is not None and result.returncode == 0
+            result = self._bt_cmd(f"connect {mac}\n", timeout=15)
+            success = "Connection successful" in result
             if success:
                 self._refresh_devices()
             return success
-        except Exception:
+        except Exception as e:
+            print(f"[BT] Connect error: {e}")
             return False
+
+    def _bt_cmd(self, commands, timeout=10):
+        """Run interactive bluetoothctl commands via stdin pipe."""
+        proc = subprocess.Popen(
+            ["bluetoothctl"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        try:
+            stdout, _ = proc.communicate(input=commands, timeout=timeout)
+            return stdout
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            stdout, _ = proc.communicate()
+            return stdout or ""
 
     def disconnect(self, mac):
         """Disconnect from a device."""

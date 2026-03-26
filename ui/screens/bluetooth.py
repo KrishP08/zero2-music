@@ -98,16 +98,40 @@ class BluetoothScreen(Screen):
             if dev:
                 if dev.connected:
                     self._status_msg = f"Disconnecting {dev.name}..."
-                    self._async_action(lambda: bt.disconnect(dev.mac))
+                    self._async_action(
+                        lambda: self.app.bluetooth.disconnect(dev.mac),
+                        success_msg=f"Disconnected from {dev.name}",
+                        fail_msg=f"Failed to disconnect {dev.name}",
+                    )
                 else:
                     self._status_msg = f"Connecting to {dev.name}..."
-                    self._async_action(lambda: bt.pair_and_connect(dev.mac))
+                    self._async_action(
+                        lambda: self._connect_and_init_audio(dev.mac),
+                        success_msg=f"Connected to {dev.name}!",
+                        fail_msg=f"Failed to connect to {dev.name}",
+                    )
 
-    def _async_action(self, func):
+    def _connect_and_init_audio(self, mac):
+        """Connect BT device, then retry audio init."""
+        import time as _time
+        success = self.app.bluetooth.pair_and_connect(mac)
+        if success:
+            # Give PipeWire/PulseAudio a moment to register the BT sink
+            _time.sleep(1.5)
+            self.app.audio.retry_init()
+        return success
+
+    def _async_action(self, func, success_msg="Done", fail_msg="Failed"):
+        import time as _time
         def worker():
-            func()
-            self._status_msg = ""
+            result = func()
+            if result:
+                self._status_msg = success_msg
+            else:
+                self._status_msg = fail_msg
             self._build_menu()
+            _time.sleep(2.5)
+            self._status_msg = ""
         self._action_thread = threading.Thread(target=worker, daemon=True)
         self._action_thread.start()
 
