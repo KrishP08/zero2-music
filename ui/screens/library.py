@@ -164,13 +164,13 @@ class LibraryScreen(Screen):
             return
 
         if self.mode == "artists":
-            screen = LibraryScreen(self.app, mode="artist_albums", filter_key=item["key"])
+            screen = LibraryScreen(self.app, mode="artist_albums", filter_key=item.get("key"))
             self.app.screen_manager.push(screen)
         elif self.mode == "albums":
-            screen = LibraryScreen(self.app, mode="album_songs", filter_key=item["key"])
+            screen = LibraryScreen(self.app, mode="album_songs", filter_key=item.get("key"))
             self.app.screen_manager.push(screen)
         elif self.mode == "artist_albums":
-            screen = LibraryScreen(self.app, mode="album_songs", filter_key=item["key"])
+            screen = LibraryScreen(self.app, mode="album_songs", filter_key=item.get("key"))
             self.app.screen_manager.push(screen)
         elif self.mode in ("songs", "album_songs"):
             track = item.get("track")
