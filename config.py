@@ -16,12 +16,11 @@ SCREEN_WIDTH = 320
 SCREEN_HEIGHT = 240
 FPS = 30
 
-# SPI display pins (for Pi with ST7789 / ILI9341)
+# SPI display pins (matched to /boot/firmware/config.txt)
 DISPLAY_SPI_PORT = 0
 DISPLAY_SPI_CS = 0
-DISPLAY_DC_PIN = 25
-DISPLAY_RST_PIN = 27
-DISPLAY_BL_PIN = 18
+DISPLAY_DC_PIN = 24
+DISPLAY_RST_PIN = 25
 
 # ── GPIO Button Pins (gamepad layout) ──────────────────────────────
 GPIO_BUTTONS = {

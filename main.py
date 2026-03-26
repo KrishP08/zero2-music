@@ -21,8 +21,16 @@ import os
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-import pygame
 import config
+
+# ── Set SDL environment BEFORE importing/initializing pygame ────────
+# This MUST happen before pygame.init() touches the audio/video drivers
+if config.IS_PI:
+    os.environ["SDL_AUDIODRIVER"] = "alsa"
+    os.environ["SDL_VIDEODRIVER"] = "dummy"
+    os.environ["SDL_NOMOUSE"] = "1"
+
+import pygame
 from core.audio_engine import AudioEngine
 from core.music_library import MusicLibrary
 from core.playlist import Playlist
@@ -150,6 +158,7 @@ class App:
         self.bluetooth.cleanup()
         self.wifi.cleanup()
         self.input.cleanup()
+        self.display.cleanup()
         pygame.quit()
 
 
