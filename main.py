@@ -26,6 +26,10 @@ import config
 # ── Set SDL environment BEFORE importing/initializing pygame ────────
 # This MUST happen before pygame.init() touches the audio/video drivers
 if config.IS_PI:
+    # Ensure XDG_RUNTIME_DIR is set (required for PulseAudio over SSH)
+    if "XDG_RUNTIME_DIR" not in os.environ:
+        os.environ["XDG_RUNTIME_DIR"] = f"/run/user/{os.getuid()}"
+        
     # PulseAudio/PipeWire handles Bluetooth audio routing automatically
     os.environ["SDL_AUDIODRIVER"] = "pulseaudio"
     os.environ["SDL_VIDEODRIVER"] = "dummy"
