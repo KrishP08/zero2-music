@@ -14,9 +14,10 @@ import numpy as np
 def rgb565(r, g, b):
     """
     Convert an (R, G, B) tuple to a 16-bit RGB565 value.
-    Standard RGB565: RRRRRGGGGGGBBBBB
+    Inverted for ST7789 INVON mode.
     """
-    return ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | ((b & 0xF8) >> 3)
+    val = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | ((b & 0xF8) >> 3)
+    return (~val) & 0xFFFF
 
 
 def surface_to_fb_bytes(surface):
@@ -43,8 +44,8 @@ def surface_to_fb_bytes(surface):
     # Standard RGB565 encoding
     rgb565_data = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | ((b & 0xF8) >> 3)
 
-    # Byte-swap for ST7789 endianness (big-endian over SPI)
-    rgb565_data = ((rgb565_data & 0xFF) << 8) | ((rgb565_data >> 8) & 0xFF)
+    # Invert all bits — ST7789 fbtft driver uses INVON mode
+    rgb565_data = (~rgb565_data) & 0xFFFF
 
     return rgb565_data.astype(np.uint16).tobytes()
 
