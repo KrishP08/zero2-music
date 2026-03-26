@@ -50,7 +50,7 @@ AUDIO_CHANNELS = 2
 AUDIO_BUFFER = 2048
 
 # ── Music Library ───────────────────────────────────────────────────
-MUSIC_DIRECTORY = os.path.expanduser("~/Music")
+MUSIC_DIRECTORY = "/home/krish/Music"
 SUPPORTED_FORMATS = (".mp3", ".flac", ".wav", ".ogg", ".m4a", ".aac")
 LIBRARY_CACHE_FILE = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "library_cache.json"
