@@ -90,11 +90,20 @@ class BluetoothManager:
         self._scan_thread.start()
 
     def _scan_worker(self, duration):
-        """Background scan thread."""
+        """Background scan thread using non-interactive bluetoothctl."""
         try:
-            self._run_cmd(["bluetoothctl", "scan", "on"], timeout=1)
-            time.sleep(duration)
-            self._run_cmd(["bluetoothctl", "scan", "off"], timeout=2)
+            # Use --timeout flag which makes bluetoothctl exit after scanning
+            proc = subprocess.Popen(
+                ["bluetoothctl", "--timeout", str(duration), "scan", "on"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                stdin=subprocess.DEVNULL,
+                text=True,
+            )
+            try:
+                proc.wait(timeout=duration + 5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
         except Exception as e:
             print(f"[BT] Scan error: {e}")
         finally:
