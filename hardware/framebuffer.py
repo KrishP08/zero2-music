@@ -1,29 +1,22 @@
 """
 Framebuffer — direct RGB565 output to /dev/fb1 for ST7789 TFT.
 
-Converts a pygame Surface to RGB565 (with BGR inversion and byte-swap
-for ST7789 endianness) and writes it directly to the Linux framebuffer.
+Converts a pygame Surface to RGB565 and writes directly to the
+Linux framebuffer. Works headless — no X, no SDL display needed.
 
-Works headless — no X, no SDL display driver needed.
+Color note: The fbtft kernel driver handles BGR/RGB ordering
+internally, so we use standard RGB565 here.
 """
 
-import os
 import numpy as np
 
 
 def rgb565(r, g, b):
     """
-    Convert an (R, G, B) tuple to a 16-bit RGB565 value
-    with BGR inversion and byte-swap for ST7789.
-
-    ST7789 expects BGR565 in big-endian, but the Linux fb
-    driver exposes it as little-endian, so we byte-swap.
+    Convert an (R, G, B) tuple to a 16-bit RGB565 value.
+    Standard RGB565: RRRRRGGGGGGBBBBB
     """
-    # BGR565: blue in the high 5 bits, red in the low 5
-    val = ((b & 0xF8) << 8) | ((g & 0xFC) << 3) | ((r & 0xF8) >> 3)
-    # Byte-swap for ST7789 endianness
-    val = ((val & 0xFF) << 8) | ((val >> 8) & 0xFF)
-    return val
+    return ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | ((b & 0xF8) >> 3)
 
 
 def surface_to_fb_bytes(surface):
@@ -47,11 +40,8 @@ def surface_to_fb_bytes(surface):
     g = pixels[:, :, 1].astype(np.uint16)
     b = pixels[:, :, 2].astype(np.uint16)
 
-    # BGR565 encoding (swap R and B for ST7789)
-    rgb565_data = ((b & 0xF8) << 8) | ((g & 0xFC) << 3) | ((r & 0xF8) >> 3)
-
-    # Byte-swap for ST7789 big-endian
-    rgb565_data = ((rgb565_data & 0xFF) << 8) | ((rgb565_data >> 8) & 0xFF)
+    # Standard RGB565 encoding
+    rgb565_data = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | ((b & 0xF8) >> 3)
 
     return rgb565_data.astype(np.uint16).tobytes()
 
@@ -59,7 +49,6 @@ def surface_to_fb_bytes(surface):
 class Framebuffer:
     """
     Direct framebuffer writer for ST7789 TFT via /dev/fb1.
-    Supports double-buffering for smoother updates.
     """
 
     def __init__(self, device="/dev/fb1", width=320, height=240):
