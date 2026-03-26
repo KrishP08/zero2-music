@@ -1,6 +1,7 @@
 """
-GPIO Button Driver — interrupt-based button input for Raspberry Pi.
-Tries gpiozero first, falls back to RPi.GPIO.
+GPIO Button Driver — polling-based button input for Raspberry Pi.
+Uses GPIO.input() polling (like pyjoy.py) instead of edge detection,
+which is broken on Bookworm's kernel.
 """
 
 import config
@@ -24,8 +25,8 @@ class ButtonEvent:
     BTN_SELECT = "btn_select"
 
 
-# Map GPIO pin number → ButtonEvent
-GPIO_BUTTON_MAP = {
+# Pin → event mapping
+_PIN_MAP = {
     17: ButtonEvent.DPAD_UP,
     27: ButtonEvent.DPAD_DOWN,
     22: ButtonEvent.DPAD_LEFT,
@@ -42,79 +43,25 @@ GPIO_BUTTON_MAP = {
     21: ButtonEvent.BTN_SELECT,
 }
 
-# Name → ButtonEvent (for gpiozero path)
-_NAME_TO_EVENT = {
-    "DPAD_UP":    ButtonEvent.DPAD_UP,
-    "DPAD_DOWN":  ButtonEvent.DPAD_DOWN,
-    "DPAD_LEFT":  ButtonEvent.DPAD_LEFT,
-    "DPAD_RIGHT": ButtonEvent.DPAD_RIGHT,
-    "A":          ButtonEvent.BTN_A,
-    "B":          ButtonEvent.BTN_B,
-    "X":          ButtonEvent.BTN_X,
-    "Y":          ButtonEvent.BTN_Y,
-    "L":          ButtonEvent.BTN_L,
-    "R":          ButtonEvent.BTN_R,
-    "L2":         ButtonEvent.BTN_L2,
-    "R2":         ButtonEvent.BTN_R2,
-    "START":      ButtonEvent.BTN_START,
-    "SELECT":     ButtonEvent.BTN_SELECT,
-}
-
 
 class GpioButtons:
     """
-    GPIO button handler with interrupt-based detection.
-    Tries gpiozero first, falls back to RPi.GPIO.
+    Polling-based GPIO button handler.
+    Call poll() once per frame — it reads pin states and detects
+    press transitions (HIGH→LOW = button pressed).
     """
-
-    DEBOUNCE_MS = 150
 
     def __init__(self):
         self._events = []
         self._gpio_available = False
-        self._buttons = {}
         self._GPIO = None
+        self._prev_state = {}  # pin → previous state (1=released, 0=pressed)
 
         if config.IS_PI:
-            # Try gpiozero first (preferred on Bookworm)
-            if self._try_gpiozero():
-                return
-            # Fall back to RPi.GPIO
-            if self._try_rpi_gpio():
-                return
-            print("[GpioButtons] ⚠ No GPIO library available!")
-            print("[GpioButtons]   Install: sudo apt install python3-gpiozero python3-rpi.gpio")
+            self._setup_gpio()
 
-    def _try_gpiozero(self):
-        """Try to set up buttons using gpiozero."""
-        try:
-            from gpiozero import Button
-
-            def make_callback(evt):
-                return lambda: self._events.append(evt)
-
-            pins = config.GPIO_BUTTONS
-            for name, pin in pins.items():
-                evt = _NAME_TO_EVENT.get(name)
-                if evt:
-                    try:
-                        btn = Button(pin, pull_up=True, bounce_time=0.05)
-                        btn.when_pressed = make_callback(evt)
-                        self._buttons[name] = btn
-                    except Exception as e:
-                        print(f"[GpioButtons] ⚠ Pin {pin} ({name}): {e}")
-
-            self._gpio_available = True
-            print(f"[GpioButtons] Initialized {len(self._buttons)} buttons (gpiozero)")
-            return True
-        except ImportError:
-            return False
-        except Exception as e:
-            print(f"[GpioButtons] gpiozero failed: {e}")
-            return False
-
-    def _try_rpi_gpio(self):
-        """Fall back to RPi.GPIO."""
+    def _setup_gpio(self):
+        """Set up all GPIO pins with pull-up resistors."""
         try:
             import RPi.GPIO as GPIO
             self._GPIO = GPIO
@@ -122,50 +69,49 @@ class GpioButtons:
             GPIO.setwarnings(False)
             GPIO.setmode(GPIO.BCM)
 
-            for pin, evt in GPIO_BUTTON_MAP.items():
-                try:
-                    GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-                    GPIO.add_event_detect(
-                        pin,
-                        GPIO.FALLING,
-                        callback=self._rpi_callback,
-                        bouncetime=self.DEBOUNCE_MS,
-                    )
-                except Exception as e:
-                    print(f"[GpioButtons] ⚠ Pin {pin}: {e}")
+            for pin in _PIN_MAP:
+                GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+                self._prev_state[pin] = 1  # released
 
             self._gpio_available = True
-            print(f"[GpioButtons] Initialized {len(GPIO_BUTTON_MAP)} buttons (RPi.GPIO)")
-            return True
-        except ImportError:
-            return False
-        except Exception as e:
-            print(f"[GpioButtons] RPi.GPIO failed: {e}")
-            return False
+            print(f"[GpioButtons] Initialized {len(_PIN_MAP)} buttons (polling)")
 
-    def _rpi_callback(self, channel):
-        """RPi.GPIO interrupt callback."""
-        evt = GPIO_BUTTON_MAP.get(channel)
-        if evt:
-            self._events.append(evt)
+        except ImportError:
+            print("[GpioButtons] ⚠ RPi.GPIO not found")
+            print("[GpioButtons]   Install: sudo apt install python3-rpi.gpio")
+        except Exception as e:
+            print(f"[GpioButtons] ⚠ GPIO init failed: {e}")
+
+    def poll(self):
+        """
+        Read all button states. Call once per frame.
+        Returns list of ButtonEvent for buttons that were JUST pressed.
+        """
+        self._events.clear()
+
+        if not self._gpio_available:
+            return self._events
+
+        GPIO = self._GPIO
+        for pin, evt in _PIN_MAP.items():
+            state = GPIO.input(pin)  # 0 = pressed (pull-up), 1 = released
+
+            # Detect press transition: was released (1), now pressed (0)
+            if state == 0 and self._prev_state[pin] == 1:
+                self._events.append(evt)
+
+            self._prev_state[pin] = state
+
+        return self._events
 
     def get_events(self):
-        """Drain and return all pending button events."""
-        events = list(self._events)
-        self._events.clear()
-        return events
+        """Compatibility — same as poll()."""
+        return self.poll()
 
     def cleanup(self):
         """Release GPIO resources."""
-        # gpiozero cleanup
-        for btn in self._buttons.values():
+        if self._gpio_available and self._GPIO:
             try:
-                btn.close()
-            except Exception:
-                pass
-        # RPi.GPIO cleanup
-        if self._GPIO:
-            try:
-                self._GPIO.cleanup(list(GPIO_BUTTON_MAP.keys()))
+                self._GPIO.cleanup(list(_PIN_MAP.keys()))
             except Exception:
                 pass

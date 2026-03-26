@@ -43,6 +43,9 @@ def surface_to_fb_bytes(surface):
     # Standard RGB565 encoding
     rgb565_data = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | ((b & 0xF8) >> 3)
 
+    # Byte-swap for ST7789 endianness (big-endian over SPI)
+    rgb565_data = ((rgb565_data & 0xFF) << 8) | ((rgb565_data >> 8) & 0xFF)
+
     return rgb565_data.astype(np.uint16).tobytes()
 
 
