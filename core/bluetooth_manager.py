@@ -149,29 +149,50 @@ class BluetoothManager:
         """Pair with a device."""
         if not self._available:
             return False
-        try:
-            result = self._bt_cmd(f"trust {mac}\npair {mac}\n", timeout=20)
-            return "Pairing successful" in result or "already" in result.lower()
-        except Exception as e:
-            print(f"[BT] Pair error: {e}")
-            return False
+        result = self._bt_cmd_stepped([
+            f"trust {mac}",
+            f"pair {mac}",
+        ], step_delay=2, timeout=20)
+        return "Pairing successful" in result or "already" in result.lower()
 
     def connect(self, mac):
         """Connect to a paired device."""
         if not self._available:
             return False
-        try:
-            result = self._bt_cmd(f"connect {mac}\n", timeout=15)
-            success = "Connection successful" in result
-            if success:
-                self._refresh_devices()
-            return success
-        except Exception as e:
-            print(f"[BT] Connect error: {e}")
+        result = self._bt_cmd_stepped([
+            f"connect {mac}",
+        ], step_delay=2, timeout=15)
+        success = "Connection successful" in result
+        if success:
+            self._refresh_devices()
+        return success
+
+    def pair_and_connect(self, mac):
+        """Trust, pair, and connect in a single bluetoothctl session."""
+        if not self._available:
             return False
 
-    def _bt_cmd(self, commands, timeout=10):
-        """Run interactive bluetoothctl commands via stdin pipe."""
+        commands = [f"trust {mac}"]
+
+        if not self._is_paired(mac):
+            commands.append(f"pair {mac}")
+
+        commands.append(f"connect {mac}")
+
+        result = self._bt_cmd_stepped(commands, step_delay=3, timeout=30)
+        print(f"[BT] pair_and_connect output: {result[-200:]}")
+        success = "Connection successful" in result
+        if success:
+            self._refresh_devices()
+        return success
+
+    def _bt_cmd_stepped(self, commands, step_delay=2, timeout=20):
+        """
+        Run a sequence of bluetoothctl commands in a single session,
+        with delays between each command.
+        """
+        import time as _time
+
         proc = subprocess.Popen(
             ["bluetoothctl"],
             stdin=subprocess.PIPE,
@@ -180,31 +201,37 @@ class BluetoothManager:
             text=True,
         )
         try:
-            stdout, _ = proc.communicate(input=commands, timeout=timeout)
-            return stdout
+            # Send each command with a delay
+            for cmd in commands:
+                proc.stdin.write(cmd + "\n")
+                proc.stdin.flush()
+                _time.sleep(step_delay)
+
+            # Send quit and collect output
+            proc.stdin.write("quit\n")
+            proc.stdin.flush()
+            stdout, _ = proc.communicate(timeout=timeout)
+            return stdout or ""
         except subprocess.TimeoutExpired:
             proc.kill()
             stdout, _ = proc.communicate()
             return stdout or ""
+        except Exception as e:
+            print(f"[BT] Command error: {e}")
+            try:
+                proc.kill()
+            except Exception:
+                pass
+            return ""
 
     def disconnect(self, mac):
         """Disconnect from a device."""
         if not self._available:
             return False
-        try:
-            result = self._run_cmd(["bluetoothctl", "disconnect", mac], timeout=5)
-            self._refresh_devices()
-            return result is not None and result.returncode == 0
-        except Exception:
-            return False
-
-    def pair_and_connect(self, mac):
-        """Pair then connect in one step."""
-        if not self._is_paired(mac):
-            if not self.pair(mac):
-                return False
-            self._run_cmd(["bluetoothctl", "trust", mac], timeout=5)
-        return self.connect(mac)
+        result = self._bt_cmd_stepped([f"disconnect {mac}"], step_delay=2, timeout=10)
+        success = "Successful disconnected" in result or "not connected" in result.lower()
+        self._refresh_devices()
+        return success
 
     def _is_paired(self, mac):
         try:
